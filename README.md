@@ -9,7 +9,6 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/AlexAli29/orm.svg)](https://pkg.go.dev/github.com/AlexAli29/orm)
 [![Go](https://img.shields.io/badge/go-1.24+-00ADD8?logo=go&logoColor=white)](go.mod)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-14→18-336791?logo=postgresql&logoColor=white)](docs/compatibility.md)
-[![CI](https://github.com/AlexAli29/orm/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexAli29/orm/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 **[Documentation](https://ormgo.vercel.app)** · [Quickstart](https://ormgo.vercel.app/en/docs/quickstart/) · [Документация на русском](https://ormgo.vercel.app/ru)
