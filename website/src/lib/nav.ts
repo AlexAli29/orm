@@ -40,6 +40,7 @@ export const nav: NavSection[] = [
     items: [
       { slug: "entities", title: { en: "Entities and tags", ru: "Сущности и теги" } },
       { slug: "types", title: { en: "Type mapping", ru: "Отображение типов" } },
+      { slug: "postgis", title: { en: "PostGIS", ru: "PostGIS" } },
       { slug: "migrations", title: { en: "Migrations", ru: "Миграции" } },
       { slug: "views", title: { en: "Views and materialized views", ru: "Представления" } },
     ],
