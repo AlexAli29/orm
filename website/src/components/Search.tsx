@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { t, type Locale } from "@/lib/nav";
 import { GopherSearching } from "./Gopher";
@@ -159,6 +160,8 @@ export function SearchButton({ locale }: { locale: Locale }) {
 
 function SearchDialog({ locale, onClose }: { locale: Locale; onClose: () => void }) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState<Record_[] | null>(null);
   const [cursor, setCursor] = useState(0);
@@ -235,16 +238,25 @@ function SearchDialog({ locale, onClose }: { locale: Locale; onClose: () => void
       ?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
 
-  return (
+  if (!mounted) return null;
+
+  // Rendered into <body>.
+  //
+  // The button lives in the header, and the header has a backdrop-filter — which
+  // makes it the containing block for any fixed-position descendant. Left in
+  // place, this dialog's "fixed inset-0" resolves to the header's 64px box, so
+  // the overlay dims the header and nothing else. A portal is the fix; moving
+  // the blur is not, because the blur is what the header is for.
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-start justify-center p-3 pt-[8vh] sm:p-6 sm:pt-[12vh]"
       role="dialog"
       aria-modal="true"
       aria-label={t("searchLong", locale)}
     >
-      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div className="search-scrim absolute inset-0" onClick={onClose} aria-hidden />
 
-      <div className="glass-strong relative flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl">
+      <div className="search-panel relative flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl">
         <div className="flex items-center gap-3 border-b border-[var(--rule)] px-4">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[var(--fg-faint)]">
             <circle cx="11" cy="11" r="7" />
@@ -338,6 +350,7 @@ function SearchDialog({ locale, onClose }: { locale: Locale; onClose: () => void
           </span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,14 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
   <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#7fd8ea"/><stop offset="100%" stop-color="#00add8"/>
+    <stop offset="0%" stop-color="#8fdff0"/><stop offset="55%" stop-color="#35bfdf"/><stop offset="100%" stop-color="#00a2cc"/>
   </linearGradient></defs>
-  <ellipse cx="9.5" cy="11" rx="4.6" ry="5.4" fill="url(#g)"/>
-  <ellipse cx="30.5" cy="11" rx="4.6" ry="5.4" fill="url(#g)"/>
-  <ellipse cx="20" cy="22" rx="15.5" ry="14.5" fill="url(#g)"/>
-  <ellipse cx="14" cy="18.5" rx="5.4" ry="5.8" fill="#fff"/>
-  <ellipse cx="26" cy="18.5" rx="5.4" ry="5.8" fill="#fff"/>
-  <circle cx="15.4" cy="19.3" r="2.4" fill="#0b2027"/>
-  <circle cx="27.4" cy="19.3" r="2.4" fill="#0b2027"/>
-  <ellipse cx="20" cy="27" rx="4.6" ry="3.4" fill="#fff"/>
-  <ellipse cx="20" cy="24.6" rx="1.7" ry="1.25" fill="#0b2027"/>
+  <ellipse cx="9" cy="11" rx="4.6" ry="5.4" fill="url(#g)"/>
+  <ellipse cx="31" cy="11" rx="4.6" ry="5.4" fill="url(#g)"/>
+  <ellipse cx="20" cy="22.5" rx="15.5" ry="14.5" fill="url(#g)"/>
+  <ellipse cx="14" cy="18.5" rx="5.4" ry="5.7" fill="#fff"/>
+  <ellipse cx="26" cy="18.5" rx="5.4" ry="5.7" fill="#fff"/>
+  <circle cx="15.4" cy="19.1" r="2.3" fill="#0b2027"/>
+  <circle cx="27.4" cy="19.1" r="2.3" fill="#0b2027"/>
+  <ellipse cx="20" cy="26" rx="2.4" ry="1.7" fill="#0b2027"/>
 </svg>

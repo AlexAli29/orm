@@ -35,11 +35,11 @@
   --fg-muted: #4a6673;
   --fg-faint: #7a949f;
 
-  --glass: rgb(255 255 255 / 0.62);
+  --glass: rgb(255 255 255 / 0.78);
   --glass-strong: rgb(255 255 255 / 0.82);
-  --glass-border: rgb(255 255 255 / 0.75);
+  --glass-border: rgb(0 117 141 / 0.13);
   --glass-edge: rgb(0 117 141 / 0.12);
-  --glass-shadow: 0 8px 32px rgb(0 68 82 / 0.10), 0 1px 2px rgb(0 68 82 / 0.06);
+  --glass-shadow: 0 10px 34px -8px rgb(0 68 82 / 0.18), 0 2px 6px -2px rgb(0 68 82 / 0.10);
 
   --accent: #0090b4;
   --accent-soft: rgb(0 173 216 / 0.12);
@@ -47,6 +47,11 @@
 
   --code-bg: rgb(255 255 255 / 0.72);
   --code-border: rgb(0 117 141 / 0.14);
+
+  /* Overlay panels sit on top of everything, so they are the one surface that
+     is opaque enough to read against any background. */
+  --panel: rgb(255 255 255 / 0.96);
+  --panel-border: rgb(0 117 141 / 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -71,6 +76,9 @@
 
     --code-bg: rgb(4 20 26 / 0.72);
     --code-border: rgb(93 201 226 / 0.14);
+
+    --panel: rgb(10 33 41 / 0.96);
+    --panel-border: rgb(93 201 226 / 0.22);
   }
 }
 
@@ -95,6 +103,9 @@
 
   --code-bg: rgb(4 20 26 / 0.72);
   --code-border: rgb(93 201 226 / 0.14);
+
+  --panel: rgb(10 33 41 / 0.96);
+  --panel-border: rgb(93 201 226 / 0.22);
 }
 
 html {
@@ -487,4 +498,37 @@ h4:hover .heading-anchor,
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/*
+  Overlays.
+
+  A translucent white panel on a light page is not a dialog, it is a smudge. The
+  scrim is dark enough to actually recede the page under it in both themes, and
+  the panel is near-opaque with its own border and a deep shadow — glass reads as
+  glass because of the edge and the shadow, not because you can see through it.
+*/
+.search-scrim {
+  background: rgb(6 22 28 / 0.55);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+}
+:root[data-theme="dark"] .search-scrim {
+  background: rgb(0 0 0 / 0.66);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .search-scrim {
+    background: rgb(0 0 0 / 0.66);
+  }
+}
+
+.search-panel {
+  background: var(--panel);
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  border: 1px solid var(--panel-border);
+  box-shadow:
+    0 24px 64px -12px rgb(0 40 50 / 0.35),
+    0 8px 24px -8px rgb(0 40 50 / 0.25),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.5);
 }

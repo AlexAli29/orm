@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { nav, t, type Locale, locales } from "@/lib/nav";
@@ -220,7 +221,10 @@ export function TableOfContents({
 
 export function MobileNav({ locale }: { locale: Locale }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
@@ -244,14 +248,17 @@ export function MobileNav({ locale }: { locale: Locale }) {
         </svg>
       </button>
 
-      {open && (
+      {/* Portalled for the same reason the search dialog is: the header has a
+          backdrop-filter, which makes it the containing block for fixed
+          descendants, and a drawer confined to a 64px header is not a drawer. */}
+      {open && mounted && createPortal(
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="search-scrim absolute inset-0"
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="glass-strong absolute inset-y-0 left-0 flex w-[86%] max-w-xs flex-col rounded-r-2xl">
+          <div className="search-panel absolute inset-y-0 left-0 flex w-[86%] max-w-xs flex-col rounded-r-2xl">
             <div className="flex items-center justify-between border-b border-[var(--rule)] px-4 py-3">
               <Link href={`/${locale}/`} className="flex items-center gap-2 font-semibold">
                 <GopherMark className="h-7 w-7" />
@@ -272,7 +279,8 @@ export function MobileNav({ locale }: { locale: Locale }) {
               <Sidebar locale={locale} onNavigate={() => setOpen(false)} />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
