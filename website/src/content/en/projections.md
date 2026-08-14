@@ -183,3 +183,78 @@ This is the one part that is about Go rather than about SQL, and it is here for 
 Go cannot express "a list of expressions whose result types are all different and all remembered". A variadic parameter has one type, and a type-parameter pack does not exist. Libraries that pretend otherwise do it with `[]any` and runtime assertions, which moves the mistake from the compiler to the customer.
 
 Writing the arity out — `Project1` through `Project8` — is what buys the checking above, and it is also what makes the row hot path do no reflection, hold no map and assert nothing. Scanning is N typed locals, one `Scan`, and one call.
+
+## Worked examples
+
+### A billing report
+
+Revenue per plan, for one month, with the count beside it — the shape a finance
+page actually wants:
+
+```go
+type PlanRevenue struct {
+    Plan    string
+    Charges int64
+    Total   *int64
+}
+
+var planRevenue = orm.Project3(
+    Invoices.Plan,
+    orm.Count[Invoice](),
+    orm.SumInt32(Invoices.AmountCents),
+    func(plan string, n int64, total *int64) PlanRevenue {
+        return PlanRevenue{Plan: plan, Charges: n, Total: total}
+    },
+)
+
+rows, err := orm.Select(db.Invoices, planRevenue).
+    Where(Invoices.IssuedAt.Between(monthStart, monthEnd)).
+    GroupBy(Invoices.Plan).
+    OrderBy(Invoices.Plan.Asc()).
+    All(ctx)
+```
+
+`Total` is `*int64` because `sum` over no rows is NULL, and a plan with no
+invoices in the window is exactly that. The count beside it is not a pointer,
+because `count` over no rows is zero.
+
+### A device roster
+
+One column, into a slice — no struct, because there is nothing to hold:
+
+```go
+var serials = orm.Project1(
+    Devices.Serial,
+    func(s string) string { return s },
+)
+
+offline, err := orm.Select(db.Devices, serials).
+    Where(Devices.LastSeenAt.Lt(cutoff)).
+    OrderBy(Devices.Serial.Asc()).
+    All(ctx)
+// []string
+```
+
+### A seating chart
+
+Two columns into a map key, because the result type is whatever the function
+returns — it does not have to be a struct:
+
+```go
+type Seat struct{ Row, Number int32 }
+
+var seats = orm.Project2(
+    Tickets.SeatRow, Tickets.SeatNumber,
+    func(r, n int32) Seat { return Seat{Row: r, Number: n} },
+)
+
+taken, err := orm.Select(db.Tickets, seats).
+    Where(Tickets.EventID.Eq(eventID)).
+    Where(Tickets.CancelledAt.IsNull()).
+    All(ctx)
+
+occupied := make(map[Seat]bool, len(taken))
+for _, s := range taken {
+    occupied[s] = true
+}
+```

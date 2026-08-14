@@ -183,3 +183,78 @@ total  := orm.Named("total", orm.Count[orm.Composed]())
 Go не умеет выразить «список выражений, у которых все типы разные и все запомнены». У вариадика один тип, а пакета параметров типа не существует. Библиотеки, которые делают вид, что умеют, делают это через `[]any` и приведения в рантайме — то есть переносят ошибку с компилятора на пользователя.
 
 Выписанное число аргументов — от `Project1` до `Project8` — это и есть то, что покупает проверки выше. Оно же оставляет горячий путь строки без рефлексии, без карты и без приведений: сканирование — это N типизированных локальных переменных, один `Scan` и один вызов.
+
+## Разобранные примеры
+
+### Отчёт по выставленным счетам
+
+Выручка по тарифам за месяц и число списаний рядом — та форма, которая нужна
+странице финансов:
+
+```go
+type PlanRevenue struct {
+    Plan    string
+    Charges int64
+    Total   *int64
+}
+
+var planRevenue = orm.Project3(
+    Invoices.Plan,
+    orm.Count[Invoice](),
+    orm.SumInt32(Invoices.AmountCents),
+    func(plan string, n int64, total *int64) PlanRevenue {
+        return PlanRevenue{Plan: plan, Charges: n, Total: total}
+    },
+)
+
+rows, err := orm.Select(db.Invoices, planRevenue).
+    Where(Invoices.IssuedAt.Between(monthStart, monthEnd)).
+    GroupBy(Invoices.Plan).
+    OrderBy(Invoices.Plan.Asc()).
+    All(ctx)
+```
+
+`Total` — это `*int64`, потому что `sum` по пустому множеству даёт NULL, а тариф
+без счетов в этом окне — ровно такой случай. Счётчик рядом не указатель, потому
+что `count` по пустому множеству равен нулю.
+
+### Список устройств
+
+Одна колонка в срез — без структуры, потому что держать нечего:
+
+```go
+var serials = orm.Project1(
+    Devices.Serial,
+    func(s string) string { return s },
+)
+
+offline, err := orm.Select(db.Devices, serials).
+    Where(Devices.LastSeenAt.Lt(cutoff)).
+    OrderBy(Devices.Serial.Asc()).
+    All(ctx)
+// []string
+```
+
+### Схема зала
+
+Две колонки в ключ карты: тип результата — это то, что вернула функция, и он не
+обязан быть структурой:
+
+```go
+type Seat struct{ Row, Number int32 }
+
+var seats = orm.Project2(
+    Tickets.SeatRow, Tickets.SeatNumber,
+    func(r, n int32) Seat { return Seat{Row: r, Number: n} },
+)
+
+taken, err := orm.Select(db.Tickets, seats).
+    Where(Tickets.EventID.Eq(eventID)).
+    Where(Tickets.CancelledAt.IsNull()).
+    All(ctx)
+
+occupied := make(map[Seat]bool, len(taken))
+for _, s := range taken {
+    occupied[s] = true
+}
+```

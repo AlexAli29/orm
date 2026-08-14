@@ -124,3 +124,70 @@ sql, args, err := db.Users.Query().Where(Users.Active.Eq(true)).SQL()
 ```
 
 Значений в SQL нет никогда. Каждое — параметр привязки, включая те, что внутри фрагментов `Expr`.
+
+## Разобранные примеры
+
+Три разные схемы: фильтр читается по-разному в зависимости от того, что он
+фильтрует.
+
+### Отслеживание посылок
+
+Отправления, которые вышли со склада и не пришли, — сначала самые старые: очередь,
+которую разбирает диспетчер.
+
+```go
+stuck, err := db.Shipments.Query().
+    Where(Shipments.DepartedAt.IsNotNull()).
+    Where(Shipments.ArrivedAt.IsNull()).
+    Where(Shipments.DepartedAt.Lt(time.Now().Add(-48*time.Hour))).
+    OrderBy(Shipments.DepartedAt.Asc()).
+    Limit(100).
+    All(ctx)
+```
+
+Две проверки на NULL — это и есть весь запрос: отправлено проставлено, доставлено
+нет. На nullable-колонке это читается так же просто, как звучит, а на `NOT NULL`
+ни одного из этих методов просто нет.
+
+### Бухгалтерская книга
+
+Последняя строка выписки по счёту — и есть ли они вообще.
+
+```go
+latest, err := db.Entries.Query().
+    Where(Entries.AccountID.Eq(accountID)).
+    OrderBy(Entries.PostedAt.Desc(), Entries.ID.Desc()).
+    One(ctx)
+if errors.Is(err, orm.ErrNotFound) {
+    // новый счёт, а не сломанный
+}
+
+any, err := db.Entries.Query().Where(Entries.AccountID.Eq(accountID)).Exists(ctx)
+```
+
+`ErrNotFound` от `One` — нормальный ответ на нормальный вопрос. `Exists` выбирает
+константу, а не строку, поэтому вопрос ничего не стоит на декодировании.
+
+### Таблица телеметрии
+
+Показания набора устройств за окно времени, потоком — их слишком много, чтобы
+держать целиком.
+
+```go
+for reading, err := range db.Readings.Query().
+    Where(Readings.DeviceID.In(deviceIDs...)).
+    Where(Readings.At.Between(from, to)).
+    OrderBy(Readings.At.Asc()).
+    Rows(ctx) {
+    if err != nil {
+        return err
+    }
+    if err := accumulate(reading); err != nil {
+        return err
+    }
+}
+```
+
+`Rows` отдаёт строки по мере прихода. Всё окно никогда не лежит в памяти
+целиком — в этом разница между отчётом, который отрабатывает, и тем, который
+убивают.

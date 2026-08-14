@@ -126,3 +126,79 @@ sql, args, _ := q.SQL()
 ```
 
 Nested statements share the writer, so numbering continues across every level. Nothing is rendered separately and concatenated.
+
+## Worked examples
+
+### A fleet dashboard
+
+Every vehicle with its last known reading, where a vehicle that has never
+reported still appears — which is the whole reason for the outer join.
+
+```go
+type Status struct {
+    Plate string
+    Fuel  *int32
+}
+
+shape := orm.Project2(
+    orm.Of(Vehicles.Plate),
+    orm.Opt(Readings.FuelPercent),
+    func(plate string, fuel *int32) Status { return Status{plate, fuel} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Vehicles.Source()).
+    LeftJoin(Readings.Source(), orm.Eq(Readings.VehicleID, Vehicles.ID)).
+    Where(orm.Cond(Vehicles.Retired.Eq(false))).
+    OrderBy(orm.Of(Vehicles.Plate).Asc()).
+    All(ctx)
+```
+
+`Opt` rather than `Of`, because a vehicle with no readings produces a row where
+the whole readings source is absent. `*int32` is that fact in the type.
+
+### A catalogue with counts
+
+A derived table computing review counts, joined back so products with none still
+list:
+
+```go
+productID := orm.Named("product_id", orm.Of(Reviews.ProductID))
+reviews   := orm.Named("reviews", orm.Count[orm.Composed]())
+
+stats := orm.Sub("review_stats", orm.Rows(productID, reviews).
+    From(Reviews.Source()).
+    GroupBy(orm.Of(Reviews.ProductID)))
+
+shape := orm.Project2(
+    orm.Of(Products.Name),
+    orm.OptRef(stats, reviews),
+    func(name string, n *int64) Listing { return Listing{name, n} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Products.Source()).
+    LeftJoin(stats, orm.Eq(orm.Ref(stats, productID), orm.Of(Products.ID))).
+    All(ctx)
+```
+
+`OptRef` is `Ref` for a source an outer join can leave absent. The count inside
+the derived table can never be NULL; read through this join it can.
+
+### A cohort, named once
+
+A CTE is worth it when the same set is needed twice, or when naming it makes the
+statement readable:
+
+```go
+signups := orm.CTE("recent_signups", orm.Rows(
+    orm.Named("id", orm.Of(Accounts.ID)),
+).From(Accounts.Source()).
+    Where(orm.Cond(Accounts.CreatedAt.Gte(weekStart))))
+
+rows, err := orm.Compose(pool, shape).
+    With(signups).
+    From(signups).
+    Join(Invoices.Source(), orm.Eq(Invoices.AccountID, orm.Ref(signups, id))).
+    All(ctx)
+```

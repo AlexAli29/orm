@@ -124,3 +124,69 @@ sql, args, err := db.Users.Query().Where(Users.Active.Eq(true)).SQL()
 ```
 
 Values are never in the SQL. Every one is a bind parameter, including the ones inside `Expr` fragments.
+
+## Worked examples
+
+Three different schemas, because a filter reads differently depending on what it
+is filtering.
+
+### A parcel tracker
+
+Shipments that left a warehouse but have not arrived, oldest first — the queue a
+dispatcher works through.
+
+```go
+stuck, err := db.Shipments.Query().
+    Where(Shipments.DepartedAt.IsNotNull()).
+    Where(Shipments.ArrivedAt.IsNull()).
+    Where(Shipments.DepartedAt.Lt(time.Now().Add(-48*time.Hour))).
+    OrderBy(Shipments.DepartedAt.Asc()).
+    Limit(100).
+    All(ctx)
+```
+
+The two NULL checks are the whole query: departed is set, arrived is not. On a
+nullable column that reads as plainly as the sentence, and on a `NOT NULL` one
+neither method exists to be misused.
+
+### A ledger
+
+The last statement line for one account, and whether there are any at all.
+
+```go
+latest, err := db.Entries.Query().
+    Where(Entries.AccountID.Eq(accountID)).
+    OrderBy(Entries.PostedAt.Desc(), Entries.ID.Desc()).
+    One(ctx)
+if errors.Is(err, orm.ErrNotFound) {
+    // a new account, not a broken one
+}
+
+any, err := db.Entries.Query().Where(Entries.AccountID.Eq(accountID)).Exists(ctx)
+```
+
+`One` returning `ErrNotFound` is a normal answer to a normal question. `Exists`
+selects a constant rather than a row, so asking costs no decoding.
+
+### A telemetry table
+
+Readings from a set of devices, in a window, streamed because there are too many
+to hold.
+
+```go
+for reading, err := range db.Readings.Query().
+    Where(Readings.DeviceID.In(deviceIDs...)).
+    Where(Readings.At.Between(from, to)).
+    OrderBy(Readings.At.Asc()).
+    Rows(ctx) {
+    if err != nil {
+        return err
+    }
+    if err := accumulate(reading); err != nil {
+        return err
+    }
+}
+```
+
+`Rows` yields as the server sends. The whole window never exists in memory at
+once, which is the difference between a report that runs and one that is killed.

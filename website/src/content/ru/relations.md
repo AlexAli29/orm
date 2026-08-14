@@ -86,3 +86,64 @@ for _, u := range users {
 ## Что определяет связанность
 
 PostgreSQL. Строки связываются по тому, что база считает равными ключами, поэтому `citext`, `numeric`, домены и составные ключи ведут себя как в базе, а не как Go-шное равенство.
+
+## Разобранные примеры
+
+### Программа конференции
+
+Каждый поток со своими докладами, каждый доклад со спикерами — три уровня, три
+запроса, сколько бы ни было строк.
+
+```go
+tracks, err := db.Tracks.Query().
+    Where(Tracks.ConferenceID.Eq(confID)).
+    With(Tracks.Talks.
+        OrderBy(Talks.StartsAt.Asc()).
+        With(Talks.Speakers)).
+    OrderBy(Tracks.Name.Asc()).
+    All(ctx)
+```
+
+Сортировка внутри `With` — это сортировка самих докладов. Отсортировать их потом
+в Go тоже можно, но это значит забрать их в том порядке, в каком их нашёл сервер.
+
+### Инвентаризация склада
+
+Товары, которые ни разу не пересчитывали, — фильтр по отсутствию связи, без
+загрузки:
+
+```go
+uncounted, err := db.Products.Query().
+    Where(Products.Counts.None()).
+    OrderBy(Products.SKU.Asc()).
+    All(ctx)
+```
+
+И наоборот, с условием на потомке:
+
+```go
+disputed, err := db.Products.Query().
+    Where(Products.Counts.Any(Counts.Variance.Gt(0))).
+    All(ctx)
+```
+
+Оба компилируются в полусоединения. Ни один не привезёт ни одной строки
+пересчёта, потому что вы её не просили.
+
+### Входящие поддержки
+
+Открытые обращения только с последним сообщением — работу делает лимит на
+родителя:
+
+```go
+tickets, err := db.Tickets.Query().
+    Where(Tickets.Status.Eq("open")).
+    With(Tickets.Messages.
+        OrderBy(Messages.SentAt.Desc()).
+        Limit(1)).
+    OrderBy(Tickets.OpenedAt.Asc()).
+    All(ctx)
+```
+
+`Limit(1)` относится к обращению, а не к результату. Один запрос возвращает
+свежайшее сообщение для каждого из них.

@@ -126,3 +126,80 @@ sql, args, _ := q.SQL()
 ```
 
 Вложенные запросы разделяют писателя, поэтому нумерация продолжается на всех уровнях. Ничто не отрисовывается отдельно и не склеивается.
+
+## Разобранные примеры
+
+### Панель автопарка
+
+Каждая машина с последним известным показанием, причём машина, которая ни разу не
+отчиталась, всё равно появляется — ради этого и нужен outer join.
+
+```go
+type Status struct {
+    Plate string
+    Fuel  *int32
+}
+
+shape := orm.Project2(
+    orm.Of(Vehicles.Plate),
+    orm.Opt(Readings.FuelPercent),
+    func(plate string, fuel *int32) Status { return Status{plate, fuel} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Vehicles.Source()).
+    LeftJoin(Readings.Source(), orm.Eq(Readings.VehicleID, Vehicles.ID)).
+    Where(orm.Cond(Vehicles.Retired.Eq(false))).
+    OrderBy(orm.Of(Vehicles.Plate).Asc()).
+    All(ctx)
+```
+
+`Opt`, а не `Of`: машина без показаний даёт строку, в которой источника показаний
+нет вовсе. `*int32` — это тот же факт, выраженный типом.
+
+### Каталог со счётчиками
+
+Производная таблица считает отзывы и джойнится обратно, чтобы товары без отзывов
+тоже попали в список:
+
+```go
+productID := orm.Named("product_id", orm.Of(Reviews.ProductID))
+reviews   := orm.Named("reviews", orm.Count[orm.Composed]())
+
+stats := orm.Sub("review_stats", orm.Rows(productID, reviews).
+    From(Reviews.Source()).
+    GroupBy(orm.Of(Reviews.ProductID)))
+
+shape := orm.Project2(
+    orm.Of(Products.Name),
+    orm.OptRef(stats, reviews),
+    func(name string, n *int64) Listing { return Listing{name, n} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Products.Source()).
+    LeftJoin(stats, orm.Eq(orm.Ref(stats, productID), orm.Of(Products.ID))).
+    All(ctx)
+```
+
+`OptRef` — это `Ref` для источника, который outer join может оставить пустым.
+Счётчик внутри производной таблицы не может быть NULL; прочитанный через этот
+джойн — может.
+
+### Когорта, названная один раз
+
+CTE оправдан, когда один и тот же набор нужен дважды или когда имя делает запрос
+читаемым:
+
+```go
+signups := orm.CTE("recent_signups", orm.Rows(
+    orm.Named("id", orm.Of(Accounts.ID)),
+).From(Accounts.Source()).
+    Where(orm.Cond(Accounts.CreatedAt.Gte(weekStart))))
+
+rows, err := orm.Compose(pool, shape).
+    With(signups).
+    From(signups).
+    Join(Invoices.Source(), orm.Eq(Invoices.AccountID, orm.Ref(signups, id))).
+    All(ctx)
+```

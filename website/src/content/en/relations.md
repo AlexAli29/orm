@@ -86,3 +86,64 @@ Three states, distinguishable: unloaded, loaded and empty, loaded and present. T
 ## What decides relatedness
 
 PostgreSQL does. Rows relate by what the database says equal keys are, so `citext`, `numeric`, domains and composite keys behave as they do in the database rather than as Go equality would.
+
+## Worked examples
+
+### A conference programme
+
+Every track with its talks, and each talk with its speakers — three levels, three
+statements, however many rows.
+
+```go
+tracks, err := db.Tracks.Query().
+    Where(Tracks.ConferenceID.Eq(confID)).
+    With(Tracks.Talks.
+        OrderBy(Talks.StartsAt.Asc()).
+        With(Talks.Speakers)).
+    OrderBy(Tracks.Name.Asc()).
+    All(ctx)
+```
+
+The ordering inside `With` is the talks' own. Sorting them in Go afterwards would
+work and would also mean fetching them in whatever order the server found them.
+
+### A warehouse audit
+
+Products that have never been counted — filtered by the absence of a relation,
+loading nothing:
+
+```go
+uncounted, err := db.Products.Query().
+    Where(Products.Counts.None()).
+    OrderBy(Products.SKU.Asc()).
+    All(ctx)
+```
+
+And the opposite, with a condition on the child:
+
+```go
+disputed, err := db.Products.Query().
+    Where(Products.Counts.Any(Counts.Variance.Gt(0))).
+    All(ctx)
+```
+
+Both compile to semi-joins. Neither brings a single count row back, because you
+did not ask for one.
+
+### A support inbox
+
+Open tickets with only their latest message, which is the per-parent limit doing
+the work:
+
+```go
+tickets, err := db.Tickets.Query().
+    Where(Tickets.Status.Eq("open")).
+    With(Tickets.Messages.
+        OrderBy(Messages.SentAt.Desc()).
+        Limit(1)).
+    OrderBy(Tickets.OpenedAt.Asc()).
+    All(ctx)
+```
+
+`Limit(1)` is per ticket, not per result. One statement returns the newest message
+for each of them.
