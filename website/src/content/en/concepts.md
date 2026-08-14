@@ -44,7 +44,10 @@ All three are mutable, single-use and not safe for concurrent use. `Clone` branc
 
 ## Projection
 
-A typed result shape: what to select, and how to read it back.
+Two things bundled: **which expressions to select**, and **a function turning
+those values into your result type**. `Project2` takes two expressions, so its
+function takes two parameters, in the same order and with the types those
+columns have.
 
 ```go
 type Summary struct {
@@ -53,12 +56,17 @@ type Summary struct {
 }
 
 var Summaries = orm.Project2(
-    Users.ID, Users.Email,
+    Users.ID,     // 1st expression → 1st parameter, int64 because id is bigint
+    Users.Email,  // 2nd expression → 2nd parameter, string because email is text
     func(id int64, email string) Summary { return Summary{ID: id, Email: email} },
 )
+
+rows, _ := orm.Select(db.Users, Summaries).All(ctx)
+// []Summary — SELECT id, email FROM users
 ```
 
-The arity is written out — `Project1` through `Project8` — because Go cannot express "a list of expressions whose types are all different and all remembered". What it buys is a row hot path with no reflection and no `[]any`.
+It is a value rather than a query: build one and use it from many queries.
+[Projections](/en/docs/projections/) has the whole of it.
 
 ## Nullability, and where it comes from
 
