@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 340" width="520" height="340" role="img" aria-label="A gopher holding a database drum stamped with a check mark">
+  <title>orm</title>
+
+  <!--
+    The banner.
+
+    Original artwork in the spirit of the Go gopher rather than a copy of it —
+    the Go gopher is Renée French's, CC BY 3.0, and nothing here reproduces her
+    drawing. The same character appears throughout the documentation site.
+
+    No text: GitHub renders this through an <img>, so any font named here would
+    resolve against the reader's machine and land differently on every one of
+    them. The words are the README's, in markdown, where they are selectable and
+    translatable and always render.
+
+    No background either. A filled panel would be right on exactly one of
+    GitHub's two themes; transparent with a cyan that reads on both is right on
+    each.
+
+    Drawing order carries the whole illusion: ears behind the head, feet and
+    arms behind the drum, drum in front of the lower body, paws over its rim.
+    Reorder any of it and the drum stops being held and becomes a box stuck to
+    a chest.
+  -->
+
+  <defs>
+    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8fdff0" />
+      <stop offset="55%" stop-color="#35bfdf" />
+      <stop offset="100%" stop-color="#00a2cc" />
+    </linearGradient>
+    <linearGradient id="drum" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6fd4ea" />
+      <stop offset="100%" stop-color="#0090b4" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#00ADD8" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#00ADD8" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- A wash rather than a panel, so the edge never disagrees with the page. -->
+  <ellipse cx="260" cy="180" rx="250" ry="150" fill="url(#glow)" />
+
+  <g transform="translate(160, 30) scale(1.05)">
+    <!-- ears, behind the head -->
+    <ellipse cx="62" cy="34" rx="13" ry="15" fill="url(#skin)" />
+    <ellipse cx="138" cy="34" rx="13" ry="15" fill="url(#skin)" />
+    <ellipse cx="62" cy="34" rx="6" ry="7.5" fill="#00758d" opacity="0.4" />
+    <ellipse cx="138" cy="34" rx="6" ry="7.5" fill="#00758d" opacity="0.4" />
+
+    <!-- feet, behind the drum -->
+    <ellipse cx="76" cy="170" rx="15" ry="7.5" fill="#00758d" />
+    <ellipse cx="124" cy="170" rx="15" ry="7.5" fill="#00758d" />
+
+    <!-- body -->
+    <ellipse cx="100" cy="98" rx="52" ry="62" fill="url(#skin)" />
+
+    <!-- eyes: the highlight offset is what makes it look alive -->
+    <ellipse cx="81" cy="64" rx="17" ry="18" fill="#fff" />
+    <ellipse cx="119" cy="64" rx="17" ry="18" fill="#fff" />
+    <circle cx="85.4" cy="66" r="7.1" fill="#0b2027" />
+    <circle cx="123.4" cy="66" r="7.1" fill="#0b2027" />
+    <circle cx="88.1" cy="61.6" r="2.4" fill="#fff" />
+    <circle cx="126.1" cy="61.6" r="2.4" fill="#fff" />
+
+    <!-- snout and incisors -->
+    <ellipse cx="100" cy="92" rx="7.6" ry="5.4" fill="#0b2027" />
+    <path d="M100 97.4 v4.7" stroke="#0b2027" stroke-width="2" stroke-linecap="round" />
+    <rect x="93.9" y="102.1" width="5.8" height="11.2" rx="1.6" fill="#fff" stroke="#0b2027" stroke-width="1.3" />
+    <rect x="100.4" y="102.1" width="5.8" height="11.2" rx="1.6" fill="#fff" stroke="#0b2027" stroke-width="1.3" />
+
+    <!-- arms, behind the drum so they end at its edge -->
+    <ellipse cx="56" cy="132" rx="11" ry="17" fill="url(#skin)" transform="rotate(-24 56 132)" />
+    <ellipse cx="144" cy="132" rx="11" ry="17" fill="url(#skin)" transform="rotate(24 144 132)" />
+
+    <!-- the drum, in front of the lower body -->
+    <ellipse cx="100" cy="158" rx="34" ry="10" fill="#00758d" />
+    <rect x="66" y="124" width="68" height="34" fill="url(#drum)" />
+    <ellipse cx="100" cy="124" rx="34" ry="10.5" fill="#8fe0f0" />
+    <ellipse cx="100" cy="124" rx="24" ry="6.5" fill="#bff0fa" opacity="0.7" />
+    <path d="M66 137 a34 10.5 0 0 0 68 0" fill="none" stroke="#e6f6fb" stroke-width="1.8" opacity="0.7" />
+    <path d="M66 148 a34 10.5 0 0 0 68 0" fill="none" stroke="#e6f6fb" stroke-width="1.8" opacity="0.5" />
+
+    <!-- paws over the rim, which is what sells the hold -->
+    <ellipse cx="70" cy="129" rx="9" ry="6.5" fill="#5dc9e2" transform="rotate(-18 70 129)" />
+    <ellipse cx="130" cy="129" rx="9" ry="6.5" fill="#5dc9e2" transform="rotate(18 130 129)" />
+
+    <!-- the stamp: the schema checked against the structs, which is the point -->
+    <circle cx="140" cy="152" r="15" fill="#2ea043" />
+    <path d="M133 152.5 l4.6 4.6 l9.4 -9.8" fill="none" stroke="#fff" stroke-width="3.2"
+          stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>
