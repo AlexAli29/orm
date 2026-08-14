@@ -1,0 +1,285 @@
+{
+  "format": 1,
+  "id": "0001_initial",
+  "atomic": true,
+  "operations": [
+    {
+      "op": "create_enum",
+      "args": {
+        "Enum": {
+          "Schema": "public",
+          "Name": "article_status",
+          "Labels": [
+            "draft",
+            "published",
+            "archived"
+          ]
+        }
+      }
+    },
+    {
+      "op": "create_table",
+      "args": {
+        "Table": {
+          "Schema": "public",
+          "Name": "authors",
+          "Columns": [
+            {
+              "Name": "id",
+              "Type": {
+                "Schema": "",
+                "Name": "int8",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 2,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "email",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "name",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "bio",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": true,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "joined_at",
+              "Type": {
+                "Schema": "",
+                "Name": "timestamptz",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "now()",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "PrimaryKey": {
+            "Name": "authors_pkey",
+            "Columns": [
+              "id"
+            ]
+          },
+          "Uniques": [
+            {
+              "Name": "authors_email_key",
+              "Columns": [
+                "email"
+              ],
+              "Constraint": true,
+              "Where": "",
+              "NullsNotDistinct": false
+            }
+          ],
+          "ForeignKeys": [],
+          "Checks": [
+            {
+              "Name": "authors_email_not_blank",
+              "Expression": "email <> ''",
+              "NotValid": false
+            }
+          ],
+          "Indexes": []
+        }
+      }
+    },
+    {
+      "op": "create_table",
+      "args": {
+        "Table": {
+          "Schema": "public",
+          "Name": "articles",
+          "Columns": [
+            {
+              "Name": "id",
+              "Type": {
+                "Schema": "",
+                "Name": "int8",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 2,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "author_id",
+              "Type": {
+                "Schema": "",
+                "Name": "int8",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "title",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "body",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "status",
+              "Type": {
+                "Schema": "public",
+                "Name": "article_status",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "'draft'",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "published_at",
+              "Type": {
+                "Schema": "",
+                "Name": "timestamptz",
+                "Array": false
+              },
+              "Nullable": true,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "created_at",
+              "Type": {
+                "Schema": "",
+                "Name": "timestamptz",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "now()",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "PrimaryKey": {
+            "Name": "articles_pkey",
+            "Columns": [
+              "id"
+            ]
+          },
+          "Uniques": [],
+          "ForeignKeys": [
+            {
+              "Name": "articles_author_id_fkey",
+              "Columns": [
+                "author_id"
+              ],
+              "RefSchema": "public",
+              "RefTable": "authors",
+              "RefColumns": [
+                "id"
+              ],
+              "OnDelete": "",
+              "OnUpdate": "",
+              "Deferrable": false,
+              "InitiallyDeferred": false,
+              "NotValid": false
+            }
+          ],
+          "Checks": [
+            {
+              "Name": "articles_title_not_blank",
+              "Expression": "title <> ''",
+              "NotValid": false
+            }
+          ],
+          "Indexes": [
+            {
+              "Name": "articles_feed_idx",
+              "Columns": [
+                {
+                  "Name": "author_id",
+                  "Expression": "",
+                  "Direction": 0,
+                  "Nulls": 0,
+                  "OpClass": ""
+                },
+                {
+                  "Name": "published_at",
+                  "Expression": "",
+                  "Direction": 1,
+                  "Nulls": 0,
+                  "OpClass": ""
+                }
+              ],
+              "Include": [
+                "title"
+              ],
+              "Unique": false,
+              "Method": "",
+              "Where": "status = 'published'",
+              "Concurrently": false
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

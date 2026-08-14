@@ -1,0 +1,25 @@
+domain/entities.go:13:1: error: E016: table ghosts does not exist
+    Go:          domain.Ghost
+    PostgreSQL:  ghosts
+    reason:      no table named ghosts was found in the search path public
+    fix:         create the table, correct the //orm:table directive on domain.Ghost, or add its schema to schema.search_path
+
+domain/entities.go:5:1: error: E011: public.logs has no primary key
+    Go:          domain.Log
+    PostgreSQL:  public.logs
+    reason:      without a primary key a row has no identity, so it cannot be updated, deleted or related to
+    fix:         add a primary key to public.logs
+
+domain/entities.go:10:2: error: E001: domain.Log.Level has no column level in public.logs
+    Go:          domain.Log.Level string
+    PostgreSQL:  public.logs.level
+    reason:      the field name derives the column level, which public.logs does not have
+    fix:         add the column, point the field at an existing one with orm:"column:<name>", or exclude it with orm:"-"
+
+domain/entities.go:18:1: error: E016: table other.things does not exist
+    Go:          domain.Thing
+    PostgreSQL:  other.things
+    reason:      no table named other.things was introspected
+    fix:         create the table, correct the //orm:table directive on domain.Thing, or add its schema to schema.search_path
+
+4 findings: 4 errors, 0 warnings

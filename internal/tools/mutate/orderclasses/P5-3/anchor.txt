@@ -1,0 +1,5 @@
+			if o.Desc {
+				w.b.WriteString(" DESC")
+			} else {
+				w.b.WriteString(" ASC")
+			}

@@ -1,0 +1,221 @@
+{
+  "format": 1,
+  "id": "0001_users_projects",
+  "atomic": true,
+  "operations": [
+    {
+      "op": "create_table",
+      "args": {
+        "Table": {
+          "Schema": "public",
+          "Name": "users",
+          "Columns": [
+            {
+              "Name": "id",
+              "Type": {
+                "Schema": "",
+                "Name": "int8",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 2,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "email",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "name",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "created_at",
+              "Type": {
+                "Schema": "",
+                "Name": "timestamptz",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "now()",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "PrimaryKey": {
+            "Name": "users_pkey",
+            "Columns": [
+              "id"
+            ]
+          },
+          "Uniques": [
+            {
+              "Name": "users_email_key",
+              "Columns": [
+                "email"
+              ],
+              "Constraint": true,
+              "Where": "",
+              "NullsNotDistinct": false
+            }
+          ],
+          "ForeignKeys": [],
+          "Checks": null,
+          "Indexes": []
+        }
+      }
+    },
+    {
+      "op": "create_table",
+      "args": {
+        "Table": {
+          "Schema": "public",
+          "Name": "projects",
+          "Columns": [
+            {
+              "Name": "id",
+              "Type": {
+                "Schema": "",
+                "Name": "int8",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 2,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "owner_id",
+              "Type": {
+                "Schema": "",
+                "Name": "int8",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "slug",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "name",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "created_at",
+              "Type": {
+                "Schema": "",
+                "Name": "timestamptz",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "now()",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "PrimaryKey": {
+            "Name": "projects_pkey",
+            "Columns": [
+              "id"
+            ]
+          },
+          "Uniques": [
+            {
+              "Name": "projects_slug_key",
+              "Columns": [
+                "slug"
+              ],
+              "Constraint": true,
+              "Where": "",
+              "NullsNotDistinct": false
+            }
+          ],
+          "ForeignKeys": [
+            {
+              "Name": "owner_id",
+              "Columns": [
+                "owner_id"
+              ],
+              "RefSchema": "public",
+              "RefTable": "users",
+              "RefColumns": [
+                "id"
+              ],
+              "OnDelete": "",
+              "OnUpdate": "",
+              "Deferrable": false,
+              "InitiallyDeferred": false,
+              "NotValid": false
+            }
+          ],
+          "Checks": null,
+          "Indexes": [
+            {
+              "Name": "projects_owner_idx",
+              "Columns": [
+                {
+                  "Name": "owner_id",
+                  "Expression": "",
+                  "Direction": 0,
+                  "Nulls": 0,
+                  "OpClass": ""
+                }
+              ],
+              "Include": null,
+              "Unique": false,
+              "Method": "",
+              "Where": "",
+              "Concurrently": false
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

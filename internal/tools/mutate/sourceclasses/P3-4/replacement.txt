@@ -1,0 +1,4 @@
+	return sel, nil, nil
+}
+
+// valueTerm makes a composed query usable where a value is expected.

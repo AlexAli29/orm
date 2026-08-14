@@ -1,0 +1,368 @@
+{
+  "format": 1,
+  "id": "0001_users_orders_user_summaries",
+  "atomic": true,
+  "operations": [
+    {
+      "op": "create_table",
+      "args": {
+        "Table": {
+          "Schema": "public",
+          "Name": "users",
+          "Columns": [
+            {
+              "Name": "id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "email",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "external_id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "optional_id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": true,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "tags",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": true
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "PrimaryKey": {
+            "Name": "users_pkey",
+            "Columns": [
+              "id"
+            ]
+          },
+          "Uniques": [
+            {
+              "Name": "users_email_key",
+              "Columns": [
+                "email"
+              ],
+              "Constraint": true,
+              "Where": "",
+              "NullsNotDistinct": false
+            }
+          ],
+          "ForeignKeys": [],
+          "Checks": null,
+          "Indexes": []
+        }
+      }
+    },
+    {
+      "op": "create_table",
+      "args": {
+        "Table": {
+          "Schema": "public",
+          "Name": "orders",
+          "Columns": [
+            {
+              "Name": "id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "user_id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "label",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "optional_id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": true,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "PrimaryKey": {
+            "Name": "orders_pkey",
+            "Columns": [
+              "id"
+            ]
+          },
+          "Uniques": [],
+          "ForeignKeys": [
+            {
+              "Name": "user_id",
+              "Columns": [
+                "user_id"
+              ],
+              "RefSchema": "public",
+              "RefTable": "users",
+              "RefColumns": [
+                "id"
+              ],
+              "OnDelete": "",
+              "OnUpdate": "",
+              "Deferrable": false,
+              "InitiallyDeferred": false,
+              "NotValid": false
+            }
+          ],
+          "Checks": null,
+          "Indexes": [
+            {
+              "Name": "orders_user_idx",
+              "Columns": [
+                {
+                  "Name": "user_id",
+                  "Expression": "",
+                  "Direction": 0,
+                  "Nulls": 0,
+                  "OpClass": ""
+                }
+              ],
+              "Include": null,
+              "Unique": false,
+              "Method": "",
+              "Where": "",
+              "Concurrently": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "op": "create_view",
+      "args": {
+        "View": {
+          "Schema": "public",
+          "Name": "user_orders",
+          "Columns": [
+            {
+              "Name": "user_id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "order_id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "label",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "Definition": {
+            "SQL": "SELECT u.id AS user_id, o.id AS order_id, o.label FROM users u JOIN orders o ON o.user_id = u.id"
+          },
+          "DependsOn": [
+            {
+              "Schema": "public",
+              "Name": "orders",
+              "Kind": 0,
+              "KindKnown": false
+            },
+            {
+              "Schema": "public",
+              "Name": "users",
+              "Kind": 0,
+              "KindKnown": false
+            }
+          ],
+          "Options": null
+        }
+      }
+    },
+    {
+      "op": "create_materialized_view",
+      "args": {
+        "View": {
+          "Schema": "public",
+          "Name": "user_summaries",
+          "Columns": [
+            {
+              "Name": "user_id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "label",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "orders",
+              "Type": {
+                "Schema": "",
+                "Name": "int8",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "Definition": {
+            "SQL": "SELECT user_id, min(label) AS label, count(*) AS orders FROM user_orders GROUP BY user_id"
+          },
+          "DependsOn": [
+            {
+              "Schema": "public",
+              "Name": "user_orders",
+              "Kind": 0,
+              "KindKnown": false
+            }
+          ],
+          "Indexes": null,
+          "WithData": true,
+          "Populated": false,
+          "Tablespace": ""
+        }
+      }
+    },
+    {
+      "op": "create_index",
+      "args": {
+        "Schema": "public",
+        "Table": "user_summaries",
+        "Index": {
+          "Name": "user_summaries_key",
+          "Columns": [
+            {
+              "Name": "user_id",
+              "Expression": "",
+              "Direction": 0,
+              "Nulls": 0,
+              "OpClass": ""
+            }
+          ],
+          "Include": null,
+          "Unique": true,
+          "Method": "",
+          "Where": "",
+          "Concurrently": false
+        }
+      }
+    }
+  ]
+}

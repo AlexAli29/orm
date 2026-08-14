@@ -1,0 +1,31 @@
+domain/entities.go:5:1: error: E002: public.invoices.domain_note is NOT NULL with no default and is not mapped
+    Go:          domain.Invoice
+    PostgreSQL:  public.invoices.domain_note public.required_text
+    reason:      domain.Invoice cannot supply a value for it, so no row can be inserted through this entity
+    fix:         map the column on domain.Invoice, give it a default, or make it nullable
+
+domain/entities.go:5:1: error: E002: public.invoices.required_note is NOT NULL with no default and is not mapped
+    Go:          domain.Invoice
+    PostgreSQL:  public.invoices.required_note text
+    reason:      domain.Invoice cannot supply a value for it, so no row can be inserted through this entity
+    fix:         map the column on domain.Invoice, give it a default, or make it nullable
+
+domain/entities.go:5:1: warning: W003: column public.invoices.created_at is not mapped
+    Go:          domain.Invoice
+    PostgreSQL:  public.invoices.created_at timestamptz
+    reason:      the column has a default, so inserts succeed without it, but its value cannot be read back
+    fix:         add a field for created_at to domain.Invoice, or leave it unmapped on purpose and set strict.unmapped_columns: off
+
+domain/entities.go:5:1: warning: W003: column public.invoices.optional_note is not mapped
+    Go:          domain.Invoice
+    PostgreSQL:  public.invoices.optional_note text
+    reason:      the column is nullable, so inserts succeed without it, but its value cannot be read back
+    fix:         add a field for optional_note to domain.Invoice, or leave it unmapped on purpose and set strict.unmapped_columns: off
+
+domain/entities.go:5:1: warning: W003: column public.invoices.seq is not mapped
+    Go:          domain.Invoice
+    PostgreSQL:  public.invoices.seq int8
+    reason:      the column has a default, so inserts succeed without it, but its value cannot be read back
+    fix:         add a field for seq to domain.Invoice, or leave it unmapped on purpose and set strict.unmapped_columns: off
+
+5 findings: 2 errors, 3 warnings

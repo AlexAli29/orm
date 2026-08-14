@@ -1,0 +1,10 @@
+version: 1
+
+schema:
+  dsn: ${BLOG_DSN}
+  search_path:
+    - public
+
+packages:
+  - path: ./internal/domain
+    output: same

@@ -1,0 +1,2 @@
+	case *Compound:
+		return true

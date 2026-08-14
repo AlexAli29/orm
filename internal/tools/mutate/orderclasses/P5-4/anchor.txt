@@ -1,0 +1,1 @@
+func (o Out[T, N]) Desc() OutputOrder { return OutputOrder{name: o.name, desc: true} }

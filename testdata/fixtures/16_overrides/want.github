@@ -1,0 +1,2 @@
+::error file=domain/entities.go,line=30,col=2,title=E006 incompatible Go and PostgreSQL types::FeeUntagged is Money but public.payments.fee_untagged is text%0A%0Atext maps to string%0A%0AFix: declare the field as string
+::error file=domain/entities.go,line=38,col=2,title=E006 incompatible Go and PostgreSQL types::WrongBand is orm.Range[string] but public.payments.wrong_band is numrange%0A%0Anumrange maps to orm.Range[Decimal]%0A%0AFix: declare the field as orm.Range[Decimal]

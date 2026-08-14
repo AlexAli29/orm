@@ -1,0 +1,5 @@
+func (o DropIndex) Apply(s *schema.Schema) error {
+	h, err := indexHolderOf(s, o.Schema, o.Table)
+	if err != nil {
+		return err
+	}

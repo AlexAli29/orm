@@ -1,0 +1,13 @@
+domain/entities.go:7:1: warning: W003: column public.events.note is not mapped
+    Go:          domain.Event
+    PostgreSQL:  public.events.note text
+    reason:      the column is nullable, so inserts succeed without it, but its value cannot be read back
+    fix:         add a field for note to domain.Event, or leave it unmapped on purpose and set strict.unmapped_columns: off
+
+domain/entities.go:12:2: warning: W015: public.events.happened is timestamp without time zone
+    Go:          domain.Event.Happened time.Time
+    PostgreSQL:  public.events.happened timestamp
+    reason:      the column stores a wall clock reading with no offset, so the instant it denotes depends on whoever reads it
+    fix:         change the column to timestamptz, or set strict.timestamp_without_tz: off if the ambiguity is intended
+
+2 findings: 0 errors, 2 warnings

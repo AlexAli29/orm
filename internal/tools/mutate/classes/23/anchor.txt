@@ -1,0 +1,6 @@
+			if n == 0 {
+				// Attribute number zero marks an expression key; the index
+				// constrains something other than a plain column.
+				u.Expression = true
+				continue
+			}

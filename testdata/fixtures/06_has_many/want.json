@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E019",
+      "severity": "error",
+      "tier": "relation",
+      "message": "domain.User.Orgs is orm.Many but the foreign key is on public.users",
+      "reason": "public.users holds one org_id per row, so it can reference at most one domain.Org",
+      "fix": "declare the field as orm.One[Org], or move the foreign key to public.orgs",
+      "entity": "domain.User",
+      "field": "Orgs",
+      "table": "public.users",
+      "relation": "Orgs",
+      "constraint": "users_org_id_fkey",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 21,
+        "column": 2
+      }
+    }
+  ]
+}

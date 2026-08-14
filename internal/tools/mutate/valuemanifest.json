@@ -1,0 +1,924 @@
+{
+  "comment": [
+    "UNION ALL phase 4: a compound in a value position — IN, NOT IN and scalar.",
+    "",
+    "Nine classes and one that cannot be written. They attack the arity contract",
+    "phase four introduced: the two rules, which are two and not one, and where the",
+    "number each is checked against comes from. Three of them attack rules older",
+    "than this phase — nested parenthesisation, global numbering, the phase two",
+    "comparison — because a value position is another public route to each, and a",
+    "route with no test is a route the rule is not proven on.",
+    "",
+    "Kept apart from the other four manifests, whose accounting is closed. UNION ALL",
+    "is not frozen and this is not the UNION manifest.",
+    "",
+    "Every killer runs in the root module and needs no database. What a server has",
+    "to settle — SQL type compatibility, and how many rows a scalar subquery may",
+    "return — is in internal/gendemo/m16_unionvalue_test.go, which is not part of",
+    "this campaign."
+  ],
+  "evidence_commit": "ab3e1df",
+  "evidence_commit_note": [
+    "ab3e1df is the revision every UNION ALL class was last applied to and run at, in a",
+    "worktree checked out at exactly that commit, with the manifests read and written",
+    "outside it so the tree stayed clean between classes. It is kept reachable as",
+    "archive/m16-union-mutation-evidence.",
+    "",
+    "The five UNION ALL campaigns were rerun together at one revision after `mutate",
+    "anchors` found four anchors that later phases had silently invalidated by editing",
+    "the code they quote. An anchor that no longer matches makes its class look like a",
+    "survivor, so the campaigns were pinned to revisions where they no longer ran.",
+    "They run again, and three harness controls were active: anchors still quote their",
+    "code, every site names the function its anchor is inside, and each semantic probe",
+    "survives every mutation in another function."
+  ],
+  "not_expressible": [
+    {
+      "id": "P4-9",
+      "name": "A foreign implementation of the value-subquery capability is accepted",
+      "why": [
+        "ValueTerm is closed by an unexported method, so a type outside the package",
+        "cannot satisfy it and no code runs to decide whether it does. There is",
+        "nothing to mutate: the rule is the Go compiler's.",
+        "",
+        "It is asserted instead by four compile-fail cases, each of which compiles a",
+        "whole program and requires it to fail: a foreign type in a scalar position,",
+        "a foreign type in a membership test, a write in a scalar position, and a",
+        "value known only as a SourceTerm in a scalar position. The last of those is",
+        "the one that proves the two read capabilities did not collapse into one."
+      ]
+    }
+  ],
+  "classes": [
+    {
+      "id": "P4-1",
+      "batch": "P4",
+      "name": "The scalar arity check stops firing",
+      "mutation": {
+        "file": "subquery.go",
+        "anchor": "valueclasses/P4-1/anchor.txt",
+        "replacement": "valueclasses/P4-1/replacement.txt",
+        "count": 1,
+        "function": "Scalar",
+        "expresses": [
+          "Scalar stops refusing a subquery of the wrong width at construction. The",
+          "arity is still computed and still reported; nothing acts on it."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestValueMutationPrecondition/P4-1"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValueMutationPrecondition$/^P4-1$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestValue_scalarArityIsRefusedAtConstruction"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValue_scalarArityIsRefusedAtConstruction$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar$"
+        ]
+      },
+      "note": [
+        "The writer still refuses more than one column, so the statement still",
+        "fails — with the writer's diagnostic rather than the builder's, and only",
+        "for arities above one. The killer asserts the diagnostic for that reason:",
+        "a killer that checked only for an error would pass under this mutant and",
+        "prove the wrong guard.",
+        "",
+        "What the construction-time check adds over the writer's is that it fires",
+        "on any arity that is not one rather than on more than one, and that it",
+        "fires when the query is built rather than when it is rendered.",
+        "",
+        "The probe was one test asserting both arity rules until the cross-function",
+        "control showed it failing under mutations in the other rule's function. Split,",
+        "it is sensitive to the function this class names and not to its neighbour."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 3,
+        "killer_passed": 3,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "subquery.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestValue_scalarArityIsRefusedAtConstruction"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar",
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar/a_plain_two-column_query_as_a_scalar_value",
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar/a_two-column_union_as_a_scalar_value"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P4-2",
+      "batch": "P4",
+      "name": "A two-column set operation is accepted as a scalar value",
+      "mutation": {
+        "file": "subquery.go",
+        "anchor": "valueclasses/P4-2/anchor.txt",
+        "replacement": "valueclasses/P4-2/replacement.txt",
+        "count": 1,
+        "function": "Scalar",
+        "expresses": [
+          "The scalar arity check runs and its refusal is dropped, so a subquery of",
+          "any width is carried into the tree as if it read one column."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestValueMutationPrecondition/P4-1"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValueMutationPrecondition$/^P4-1$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestValue_scalarArityIsRefusedAtConstruction"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValue_scalarArityIsRefusedAtConstruction$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar$"
+        ]
+      },
+      "note": [
+        "P4-1 removes the condition and P4-2 removes what it does, which are the two",
+        "ways this guard can be lost. They share a killer because they are the same",
+        "guard; each is applied and refuted separately so that a repair to one is",
+        "not read as evidence about the other.",
+        "",
+        "The probe was one test asserting both arity rules until the cross-function",
+        "control showed it failing under mutations in the other rule's function. Split,",
+        "it is sensitive to the function this class names and not to its neighbour."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 3,
+        "killer_passed": 3,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "subquery.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestValue_scalarArityIsRefusedAtConstruction"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar",
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar/a_plain_two-column_query_as_a_scalar_value",
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAScalar/a_two-column_union_as_a_scalar_value"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P4-3",
+      "batch": "P4",
+      "name": "The membership-test arity check stops firing",
+      "mutation": {
+        "file": "subquery.go",
+        "anchor": "valueclasses/P4-3/anchor.txt",
+        "replacement": "valueclasses/P4-3/replacement.txt",
+        "count": 1,
+        "function": "inSub",
+        "expresses": [
+          "IN and NOT IN stop refusing a right-hand side of the wrong width, so an",
+          "expression is compared against a subquery returning some other number of",
+          "columns and the caller is told about it, if at all, much later."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestValueMutationPrecondition/P4-3"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValueMutationPrecondition$/^P4-3$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestValue_membershipArityIsRefusedAtConstruction"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValue_membershipArityIsRefusedAtConstruction$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest$"
+        ]
+      },
+      "note": [
+        "As with P4-1, the writer's own check still fires above one column, so the",
+        "killer asserts the diagnostic. It asserts the left-hand side's arity in",
+        "particular — 'compares 1 column' — because that is the half the writer",
+        "does not know: the writer sees a tree and not the expression's width.",
+        "",
+        "The probe was one test asserting both arity rules until the cross-function",
+        "control showed it failing under mutations in the other rule's function. Split,",
+        "it is sensitive to the function this class names and not to its neighbour."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 4,
+        "killer_passed": 4,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "subquery.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestValue_membershipArityIsRefusedAtConstruction"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest",
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest/a_two-column_union_in_a_membership_test",
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest/an_entity_query,_which_selects_its_whole_descriptor"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P4-4",
+      "batch": "P4",
+      "name": "The left-hand side's arity is taken from the right-hand side",
+      "mutation": {
+        "file": "subquery.go",
+        "anchor": "valueclasses/P4-4/anchor.txt",
+        "replacement": "valueclasses/P4-4/replacement.txt",
+        "count": 1,
+        "function": "inSub",
+        "expresses": [
+          "The number of columns a membership test compares stops being a property",
+          "of the expression on its left and becomes whatever the subquery returned,",
+          "so the comparison is always satisfied and the rule is not a rule."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestValueMutationPrecondition/P4-4"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValueMutationPrecondition$/^P4-4$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestValue_membershipArityIsRefusedAtConstruction"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValue_membershipArityIsRefusedAtConstruction$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest$"
+        ]
+      },
+      "note": [
+        "This is the mutation the rule is written to survive. The required arity is",
+        "spelled as the left-hand side's rather than as the constant one, so that a",
+        "tuple left-hand side would change it in one place — and a mutation that",
+        "sources it from the wrong side is exactly what that spelling risks.",
+        "",
+        "The probe was one test asserting both arity rules until the cross-function",
+        "control showed it failing under mutations in the other rule's function. Split,",
+        "it is sensitive to the function this class names and not to its neighbour."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 4,
+        "killer_passed": 4,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "subquery.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestValue_membershipArityIsRefusedAtConstruction"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest",
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest/a_two-column_union_in_a_membership_test",
+          "TestUnionValue_refusesTheWrongNumberOfColumnsInAMembershipTest/an_entity_query,_which_selects_its_whole_descriptor"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P4-5",
+      "batch": "P4",
+      "name": "A compound nested in another loses its parentheses in a value position",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "valueclasses/P4-5/anchor.txt",
+        "replacement": "valueclasses/P4-5/replacement.txt",
+        "count": 1,
+        "function": "needsParens",
+        "expresses": [
+          "The inner operation is written bare inside the outer one, so its LIMIT and",
+          "OFFSET bind to the outer and the grouping the caller wrote is not the one",
+          "PostgreSQL reads."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestValueMutationPrecondition/P4-5"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValueMutationPrecondition$/^P4-5$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_nestedCompoundIsParenthesised"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_nestedCompoundIsParenthesised$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionValue_nestedCompound"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionValue_nestedCompound$"
+        ]
+      },
+      "note": [
+        "The same site as phase three's P3-6, with a phase four killer. The rule is",
+        "the compiler's and one phase does not own it; what each phase adds is",
+        "another public route that reaches it, and a route with no test is a route",
+        "the rule is not proven on."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_nestedCompoundIsParenthesised"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionValue_nestedCompound"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P4-6",
+      "batch": "P4",
+      "name": "A later branch's parameters are dropped from the argument list",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "valueclasses/P4-6/anchor.txt",
+        "replacement": "valueclasses/P4-6/replacement.txt",
+        "count": 1,
+        "function": "Compound.write",
+        "expresses": [
+          "Every branch after the first writes its placeholders into the text and its",
+          "values are then discarded, so the statement names more parameters than it",
+          "binds and the ones after it are shifted onto the wrong clauses."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestValueMutationPrecondition/P4-6"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValueMutationPrecondition$/^P4-6$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_placeholdersAreGlobal"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_placeholdersAreGlobal$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionValue_numbersEveryParameterAcrossOneStatement"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionValue_numbersEveryParameterAcrossOneStatement$"
+        ]
+      },
+      "note": [
+        "The killer asserts the argument list value by value as well as the text.",
+        "A count alone would not do: dropping two values and adding two elsewhere",
+        "leaves the length right."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_placeholdersAreGlobal"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionValue_numbersEveryParameterAcrossOneStatement"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P4-7",
+      "batch": "P4",
+      "name": "Placeholder numbering restarts inside the value subquery",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "valueclasses/P4-7/anchor.txt",
+        "replacement": "valueclasses/P4-7/replacement.txt",
+        "count": 1,
+        "function": "Compound.write",
+        "expresses": [
+          "Each branch is numbered from one and the values are concatenated in order,",
+          "so the statement is valid SQL binding the first branch's values into the",
+          "second and shifting everything the enclosing query wrote after it."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestValueMutationPrecondition/P4-7"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValueMutationPrecondition$/^P4-7$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_placeholdersAreGlobal"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_placeholdersAreGlobal$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionValue_numbersEveryParameterAcrossOneStatement"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionValue_numbersEveryParameterAcrossOneStatement$"
+        ]
+      },
+      "note": [
+        "P4-6 and P4-7 share a killer and break different halves of it: P4-6 changes",
+        "which values are bound and P4-7 changes what the text names. The test",
+        "asserts both, which is why one test can refute both."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_placeholdersAreGlobal"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionValue_numbersEveryParameterAcrossOneStatement"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P4-8",
+      "batch": "P4",
+      "name": "A set operation's value arity stops coming from its result shape",
+      "mutation": {
+        "file": "union.go",
+        "anchor": "valueclasses/P4-8/anchor.txt",
+        "replacement": "valueclasses/P4-8/replacement.txt",
+        "count": 1,
+        "function": "UnionQuery.valueTerm",
+        "expresses": [
+          "The arity a compound reports becomes its number of branches rather than",
+          "its number of columns. The two are the same for a great many unions —",
+          "two branches of two columns — which is what makes this the plausible",
+          "confusion rather than an absurd one, and it refuses valid queries as",
+          "readily as it accepts invalid ones."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestValueMutationPrecondition/P4-8"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValueMutationPrecondition$/^P4-8$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestValue_compoundArityComesFromTheResultShape"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValue_compoundArityComesFromTheResultShape$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionValue_isAMembershipTest"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionValue_isAMembershipTest$"
+        ]
+      },
+      "note": [
+        "The killer is a positive case: a two-branch union of one column each, which",
+        "is valid and which this mutant refuses. A negative killer would not do —",
+        "the mutant makes some invalid unions look valid and some valid ones look",
+        "invalid, and it is the second that no other guard catches."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "union.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestValue_compoundArityComesFromTheResultShape"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionValue_isAMembershipTest"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P4-10",
+      "batch": "P4",
+      "name": "Phase two's shape comparison is weakened while a union is a value subquery",
+      "mutation": {
+        "file": "resultshape.go",
+        "anchor": "valueclasses/P4-10/anchor.txt",
+        "replacement": "valueclasses/P4-10/replacement.txt",
+        "count": 1,
+        "function": "compareResultShapes",
+        "expresses": [
+          "The one comparison authority stops checking the Go type of each slot, so a",
+          "union whose branches do not agree becomes a value subquery. Integrating a",
+          "new position must not be a way to reach an operation phase two refuses."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestValueMutationPrecondition/P4-10"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestValueMutationPrecondition$/^P4-10$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompare_refusesEveryMismatchWithoutWidening"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestCompare_refusesEveryMismatchWithoutWidening$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionValue_refusesAUnionThatDidNotValidate"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionValue_refusesAUnionThatDidNotValidate$"
+        ]
+      },
+      "note": [
+        "The same site as phase two's P2-1, with a phase four killer: a union that",
+        "did not validate must not become a membership test or a scalar value, and",
+        "the diagnostic that comes out of the value position must be the union's own",
+        "rather than something the value position invented."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 3,
+        "killer_passed": 3,
+        "killer_skipped": 0,
+        "semantic_ran": 8,
+        "semantic_passed": 8,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "resultshape.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompare_refusesEveryMismatchWithoutWidening",
+          "TestCompare_refusesEveryMismatchWithoutWidening/T_against_*T",
+          "TestCompare_refusesEveryMismatchWithoutWidening/a_mismatch_after_several_matching_columns",
+          "TestCompare_refusesEveryMismatchWithoutWidening/a_text_type_against_a_value_type",
+          "TestCompare_refusesEveryMismatchWithoutWidening/int32_against_int64"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionValue_refusesAUnionThatDidNotValidate",
+          "TestUnionValue_refusesAUnionThatDidNotValidate/as_a_scalar_value",
+          "TestUnionValue_refusesAUnionThatDidNotValidate/in_a_membership_test"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    }
+  ]
+}

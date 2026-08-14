@@ -1,0 +1,10 @@
+		if err := c.writeBranch(w, b); err != nil {
+			// Nesting is not re-announced. A compound past the depth limit would
+			// otherwise report the one sentence that says what went wrong behind
+			// one "branch 1: " per level, which is a diagnostic nobody reads to
+			// the end.
+			if strings.HasPrefix(err.Error(), "branch ") {
+				return err
+			}
+			return fmt.Errorf("branch %d: %w", i+1, err)
+		}

@@ -1,0 +1,8 @@
+	captured := slices.Clone(searchPath)
+	var database string
+	if err := conn.QueryRow(ctx, `SELECT current_database()`).Scan(&database); err != nil {
+		return nil, err
+	}
+	captured = append(captured, "db:"+database)
+	return model.NewSchemaWithViews(captured, tables, views), nil
+}

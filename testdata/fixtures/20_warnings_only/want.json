@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 2,
+    "errors": 0,
+    "warnings": 2
+  },
+  "findings": [
+    {
+      "code": "W003",
+      "severity": "warning",
+      "tier": "column",
+      "message": "column public.events.note is not mapped",
+      "reason": "the column is nullable, so inserts succeed without it, but its value cannot be read back",
+      "fix": "add a field for note to domain.Event, or leave it unmapped on purpose and set strict.unmapped_columns: off",
+      "entity": "domain.Event",
+      "table": "public.events",
+      "column": "note",
+      "pg_type": "text",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "code": "W015",
+      "severity": "warning",
+      "tier": "column",
+      "message": "public.events.happened is timestamp without time zone",
+      "reason": "the column stores a wall clock reading with no offset, so the instant it denotes depends on whoever reads it",
+      "fix": "change the column to timestamptz, or set strict.timestamp_without_tz: off if the ambiguity is intended",
+      "entity": "domain.Event",
+      "field": "Happened",
+      "go_type": "time.Time",
+      "table": "public.events",
+      "column": "happened",
+      "pg_type": "timestamp",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 12,
+        "column": 2
+      }
+    }
+  ]
+}

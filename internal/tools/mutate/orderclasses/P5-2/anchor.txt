@@ -1,0 +1,6 @@
+	for _, slot := range q.shape.slots {
+		if slot.alias == name {
+			return true
+		}
+	}
+	return false

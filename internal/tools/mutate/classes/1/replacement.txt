@@ -1,0 +1,1 @@
+	s.MaterializedViews = append(s.MaterializedViews, m)

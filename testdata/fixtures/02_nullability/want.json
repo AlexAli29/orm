@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 3,
+    "errors": 2,
+    "warnings": 1
+  },
+  "findings": [
+    {
+      "code": "E004",
+      "severity": "error",
+      "tier": "column",
+      "message": "nullable column public.users.nickname cannot be represented by string",
+      "reason": "string has no value that means SQL NULL",
+      "fix": "use *string, or sql.Null[string]",
+      "entity": "domain.User",
+      "field": "Nickname",
+      "go_type": "string",
+      "table": "public.users",
+      "column": "nickname",
+      "pg_type": "text",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 12,
+        "column": 2
+      }
+    },
+    {
+      "code": "E004",
+      "severity": "error",
+      "tier": "column",
+      "message": "nullable column public.users.tags cannot be represented by []string",
+      "reason": "a slice cannot distinguish SQL NULL from an empty array: both arrive as a nil or empty slice",
+      "fix": "use *[]string",
+      "entity": "domain.User",
+      "field": "Tags",
+      "go_type": "[]string",
+      "table": "public.users",
+      "column": "tags",
+      "pg_type": "text[]",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 17,
+        "column": 2
+      }
+    },
+    {
+      "code": "W005",
+      "severity": "warning",
+      "tier": "column",
+      "message": "Email is a pointer but public.users.email is NOT NULL",
+      "reason": "the column can never be NULL, so the pointer adds a nil case that the database cannot produce",
+      "fix": "drop the pointer: string",
+      "entity": "domain.User",
+      "field": "Email",
+      "go_type": "*string",
+      "table": "public.users",
+      "column": "email",
+      "pg_type": "text",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 25,
+        "column": 2
+      }
+    }
+  ]
+}

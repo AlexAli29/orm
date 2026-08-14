@@ -1,0 +1,3 @@
+	diffMaterializedViewIndexes(have, m, d)
+	return nil
+}

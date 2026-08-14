@@ -1,0 +1,3 @@
+	if a.Unique != b.Unique ||
+		(a.Method != b.Method && a.Method != "gist" && b.Method != "gist") ||
+		a.Where != b.Where {

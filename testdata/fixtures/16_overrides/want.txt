@@ -1,0 +1,13 @@
+domain/entities.go:30:2: error: E006: FeeUntagged is Money but public.payments.fee_untagged is text
+    Go:          domain.Payment.FeeUntagged Money
+    PostgreSQL:  public.payments.fee_untagged text
+    reason:      text maps to string
+    fix:         declare the field as string
+
+domain/entities.go:38:2: error: E006: WrongBand is orm.Range[string] but public.payments.wrong_band is numrange
+    Go:          domain.Payment.WrongBand orm.Range[string]
+    PostgreSQL:  public.payments.wrong_band numrange
+    reason:      numrange maps to orm.Range[Decimal]
+    fix:         declare the field as orm.Range[Decimal]
+
+2 findings: 2 errors, 0 warnings

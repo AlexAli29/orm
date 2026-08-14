@@ -1,0 +1,4 @@
+			if i > 0 {
+				w.b.WriteString(", ")
+			}
+			// A bare identifier, not a qualified one: it names a column of the

@@ -1,0 +1,11 @@
+func (o CreateIndex) Apply(s *schema.Schema) error {
+	h := indexHolder{}
+	for i := range s.Tables {
+		if s.Tables[i].Schema == o.Schema && s.Tables[i].Name == o.Table {
+			t := &s.Tables[i]
+			h = indexHolder{indexes: &t.Indexes, normalize: t.Normalize}
+		}
+	}
+	if h.indexes == nil {
+		return fmt.Errorf("no table %s.%s is in the migration state", o.Schema, o.Table)
+	}

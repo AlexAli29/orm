@@ -1,0 +1,104 @@
+{
+  "format": 1,
+  "id": "0002_schema_a_users_schema_b_users",
+  "dependsOn": [
+    "0001_users_orders_user_summaries"
+  ],
+  "atomic": true,
+  "operations": [
+    {
+      "op": "create_table",
+      "args": {
+        "Table": {
+          "Schema": "schema_a",
+          "Name": "users",
+          "Columns": [
+            {
+              "Name": "id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "label",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "PrimaryKey": {
+            "Name": "users_pkey",
+            "Columns": [
+              "id"
+            ]
+          },
+          "Uniques": [],
+          "ForeignKeys": [],
+          "Checks": null,
+          "Indexes": []
+        }
+      }
+    },
+    {
+      "op": "create_table",
+      "args": {
+        "Table": {
+          "Schema": "schema_b",
+          "Name": "users",
+          "Columns": [
+            {
+              "Name": "id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "label",
+              "Type": {
+                "Schema": "",
+                "Name": "text",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "PrimaryKey": {
+            "Name": "users_pkey",
+            "Columns": [
+              "id"
+            ]
+          },
+          "Uniques": [],
+          "ForeignKeys": [],
+          "Checks": null,
+          "Indexes": []
+        }
+      }
+    }
+  ]
+}

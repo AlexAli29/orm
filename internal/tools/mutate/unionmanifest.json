@@ -1,0 +1,617 @@
+{
+  "comment": [
+    "UNION ALL phase 2: the public API and strict branch result compatibility.",
+    "",
+    "Six classes, not a campaign. The milestone is not frozen and this is not the",
+    "UNION manifest — it is the focused set that attacks the rules phase 2 actually",
+    "introduced: the one comparison authority, the shape a composed query carries,",
+    "the shape a nested union carries, and the two guards that keep a query with no",
+    "result out of a set operation. Everything else about UNION ALL — sources, CTEs,",
+    "writes, ordering, the integration matrix — has no rules here yet and therefore",
+    "nothing to mutate.",
+    "",
+    "Kept apart from manifest.json and uuidmanifest.json on purpose. Those two have",
+    "closed accounting, and merging a batch that will grow into either of them would",
+    "reopen a total that is already evidence.",
+    "",
+    "Every killer runs in the root module and needs no database: what these classes",
+    "attack is decided when a union is built, before any statement exists. The",
+    "server-side proof that the resulting statements run is in",
+    "internal/gendemo/m16_union_test.go, which is not part of this campaign."
+  ],
+  "evidence_commit": "ab3e1df",
+  "evidence_commit_note": [
+    "ab3e1df is the revision every UNION ALL class was last applied to and run at, in a",
+    "worktree checked out at exactly that commit, with the manifests read and written",
+    "outside it so the tree stayed clean between classes. It is kept reachable as",
+    "archive/m16-union-mutation-evidence.",
+    "",
+    "The five UNION ALL campaigns were rerun together at one revision after `mutate",
+    "anchors` found four anchors that later phases had silently invalidated by editing",
+    "the code they quote. An anchor that no longer matches makes its class look like a",
+    "survivor, so the campaigns were pinned to revisions where they no longer ran.",
+    "They run again, and three harness controls were active: anchors still quote their",
+    "code, every site names the function its anchor is inside, and each semantic probe",
+    "survives every mutation in another function."
+  ],
+  "classes": [
+    {
+      "id": "P2-1",
+      "batch": "P2",
+      "name": "Two branches stop having to agree on the Go type of a result column",
+      "mutation": {
+        "file": "resultshape.go",
+        "anchor": "unionclasses/P2-1/anchor.txt",
+        "replacement": "unionclasses/P2-1/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The one comparison authority stops looking at the Go type each slot is",
+          "read into, so a branch selecting int32 is accepted against a first branch",
+          "selecting int64 and the scanner reads a value the column cannot hold."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUnionMutationPrecondition/P2-1"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionMutationPrecondition$/^P2-1$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompare_refusesEveryMismatchWithoutWidening"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestCompare_refusesEveryMismatchWithoutWidening$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnion_refusesBranchesThatAgreeOnlyOnTheGoResultType"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnion_refusesBranchesThatAgreeOnlyOnTheGoResultType$"
+        ]
+      },
+      "note": [
+        "The semantic probe is the comparator's own matrix, at the level of the",
+        "function that was changed. The killer is the public guarantee that the Go",
+        "result type R is not the compatibility rule: its two branches build the same",
+        "string out of a text column and a nullable one, so the compiler is satisfied",
+        "and only the shape comparison can refuse them."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 8,
+        "semantic_passed": 8,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "resultshape.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompare_refusesEveryMismatchWithoutWidening",
+          "TestCompare_refusesEveryMismatchWithoutWidening/T_against_*T",
+          "TestCompare_refusesEveryMismatchWithoutWidening/a_mismatch_after_several_matching_columns",
+          "TestCompare_refusesEveryMismatchWithoutWidening/a_text_type_against_a_value_type",
+          "TestCompare_refusesEveryMismatchWithoutWidening/int32_against_int64"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnion_refusesBranchesThatAgreeOnlyOnTheGoResultType"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P2-2",
+      "batch": "P2",
+      "name": "Two branches stop having to agree on whether a result column can be NULL",
+      "mutation": {
+        "file": "resultshape.go",
+        "anchor": "unionclasses/P2-2/anchor.txt",
+        "replacement": "unionclasses/P2-2/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "Nullability stops being compared, so a branch whose column can be NULL is",
+          "accepted against a first branch whose destination was proven non-null. This",
+          "is the widening the milestone refuses to perform: PostgreSQL would resolve",
+          "it, and resolving it here would pick a destination the caller did not write."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUnionMutationPrecondition/P2-2"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionMutationPrecondition$/^P2-2$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompare_refusesEveryMismatchWithoutWidening"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestCompare_refusesEveryMismatchWithoutWidening$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnion_refusesEntitiesWhoseDescriptorsDisagree"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnion_refusesEntitiesWhoseDescriptorsDisagree$"
+        ]
+      },
+      "note": [
+        "The killer unions two entity descriptors of one Go type that differ only in",
+        "NotNull. Nothing about E separates them, which is why it is the case that",
+        "reaches the nullability comparison and nothing else."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 8,
+        "semantic_passed": 8,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "resultshape.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompare_refusesEveryMismatchWithoutWidening",
+          "TestCompare_refusesEveryMismatchWithoutWidening/nullable_against_not_nullable"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnion_refusesEntitiesWhoseDescriptorsDisagree"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P2-3",
+      "batch": "P2",
+      "name": "A branch selecting more columns than the first stops being refused",
+      "mutation": {
+        "file": "resultshape.go",
+        "anchor": "unionclasses/P2-3/anchor.txt",
+        "replacement": "unionclasses/P2-3/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The column-count comparison is weakened from inequality to 'the first",
+          "branch must not be wider', so a later branch with extra columns is accepted",
+          "and only its leading columns are ever compared. The statement then fails in",
+          "PostgreSQL rather than at construction, which is the failure this",
+          "milestone exists to move earlier."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUnionMutationPrecondition/P2-3"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionMutationPrecondition$/^P2-3$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompare_refusesEveryMismatchWithoutWidening"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestCompare_refusesEveryMismatchWithoutWidening$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnion_refusesIncompatibleBranchesWhenTheUnionIsBuilt"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnion_refusesIncompatibleBranchesWhenTheUnionIsBuilt$"
+        ]
+      },
+      "note": [
+        "The mutation is a weakening rather than a deletion: deleting the check would",
+        "index past the end of the shorter shape and panic, which any test catches for",
+        "the wrong reason. A weakening produces a union that builds, renders and is",
+        "wrong, which is what has to be caught."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 9,
+        "killer_passed": 9,
+        "killer_skipped": 0,
+        "semantic_ran": 8,
+        "semantic_passed": 8,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "resultshape.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompare_refusesEveryMismatchWithoutWidening",
+          "TestCompare_refusesEveryMismatchWithoutWidening/a_different_number_of_columns"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnion_refusesIncompatibleBranchesWhenTheUnionIsBuilt",
+          "TestUnion_refusesIncompatibleBranchesWhenTheUnionIsBuilt/a_different_number_of_columns"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P2-4",
+      "batch": "P2",
+      "name": "A composed query stops carrying the shape of the projection it was built from",
+      "mutation": {
+        "file": "composed.go",
+        "anchor": "unionclasses/P2-4/anchor.txt",
+        "replacement": "unionclasses/P2-4/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "Compose keeps the select list and the scanner but drops the result shape, so",
+          "every composed query becomes a query that cannot describe its own result and",
+          "no union of composed branches can be validated at all."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUnionMutationPrecondition/P2-4"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionMutationPrecondition$/^P2-4$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestShape_composeCarriesTheProjectionsShape"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestShape_composeCarriesTheProjectionsShape$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnion_rendersOneStatementFromTwoBranches"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnion_rendersOneStatementFromTwoBranches$"
+        ]
+      },
+      "note": [
+        "The shape has to be stored on the query rather than recovered later: the",
+        "statement a composed query renders does not carry Go types, and rebuilding a",
+        "shape from it would be the reconstruction this milestone rules out. The",
+        "killer is the simplest positive case there is, which is the point — losing",
+        "the shape takes the whole feature with it."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "composed.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestShape_composeCarriesTheProjectionsShape"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnion_rendersOneStatementFromTwoBranches"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P2-5",
+      "batch": "P2",
+      "name": "A validated set operation stops carrying its shape when it is itself a branch",
+      "mutation": {
+        "file": "union.go",
+        "anchor": "unionclasses/P2-5/anchor.txt",
+        "replacement": "unionclasses/P2-5/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "A union used as a branch of another union contributes its tree and its",
+          "scanner but not the shape it was validated with, so the outer operation has",
+          "nothing to check its other branches against."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUnionMutationPrecondition/P2-5"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionMutationPrecondition$/^P2-5$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUnion_nestsAsABranchOfAnotherUnion"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnion_nestsAsABranchOfAnotherUnion$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnion_aNestedUnionStillValidatesItsOuterBranches"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnion_aNestedUnionStillValidatesItsOuterBranches$"
+        ]
+      },
+      "note": [
+        "The semantic probe is the positive case — a nested union that must still",
+        "render — and the killer is the negative one: a nested union whose outer",
+        "branch is the wrong width must be refused for that reason, and under the",
+        "mutant it is refused for a different reason, which is not the same guarantee."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "union.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUnion_nestsAsABranchOfAnotherUnion"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnion_aNestedUnionStillValidatesItsOuterBranches"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P2-6",
+      "batch": "P2",
+      "name": "A query that cannot describe its result reaches a set operation",
+      "mutation": [
+        {
+          "file": "union.go",
+          "anchor": "unionclasses/P2-6/a/anchor.txt",
+          "replacement": "unionclasses/P2-6/a/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "The builder stops refusing a source-only query, which is the first of the",
+            "two independent guards."
+          ]
+        },
+        {
+          "file": "resultshape.go",
+          "anchor": "unionclasses/P2-6/b/anchor.txt",
+          "replacement": "unionclasses/P2-6/b/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "The comparison stops refusing a shape that was never built, which is the",
+            "second guard and the one that would otherwise catch what the first let",
+            "through."
+          ]
+        }
+      ],
+      "precondition": {
+        "expect": [
+          "TestUnionMutationPrecondition/P2-6"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionMutationPrecondition$/^P2-6$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompare_refusesEveryMismatchWithoutWidening"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestCompare_refusesEveryMismatchWithoutWidening$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnion_refusesASourceOnlyQueryAsABranch"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnion_refusesASourceOnlyQueryAsABranch$"
+        ]
+      },
+      "note": [
+        "Two sites, because the property is guaranteed twice over and bypassing one",
+        "alone proves nothing about the other. What the combined bypass shows is that",
+        "a shapeless query does not silently become a branch: it is still refused, but",
+        "for having no scanner rather than for having no shape, and the killer asserts",
+        "the diagnostic as well as the refusal."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 8,
+        "semantic_passed": 8,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "union.go",
+          "resultshape.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompare_refusesEveryMismatchWithoutWidening",
+          "TestCompare_refusesEveryMismatchWithoutWidening/a_branch_that_describes_nothing"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnion_refusesASourceOnlyQueryAsABranch"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    }
+  ]
+}

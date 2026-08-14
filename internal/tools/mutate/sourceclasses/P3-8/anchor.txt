@@ -1,0 +1,4 @@
+	w.scope.Push()
+	defer w.scope.Pop()
+
+	popWith, err := w.writeWith(c.With)

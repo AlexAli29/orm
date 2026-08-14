@@ -1,0 +1,1 @@
+	return c.Unique && !c.Partial && c.Columns > 0

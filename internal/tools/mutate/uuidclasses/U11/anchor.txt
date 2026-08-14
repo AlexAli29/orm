@@ -1,0 +1,1 @@
+	fmt.Fprintf(b, "  col %s go %s pg %s", col.Name, cm.Field.Type.Src, typeName(col.Type))

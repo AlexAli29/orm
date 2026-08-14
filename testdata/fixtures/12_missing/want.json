@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 4,
+    "errors": 4,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E016",
+      "severity": "error",
+      "tier": "entity",
+      "message": "table ghosts does not exist",
+      "reason": "no table named ghosts was found in the search path public",
+      "fix": "create the table, correct the //orm:table directive on domain.Ghost, or add its schema to schema.search_path",
+      "entity": "domain.Ghost",
+      "table": "ghosts",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "code": "E011",
+      "severity": "error",
+      "tier": "entity",
+      "message": "public.logs has no primary key",
+      "reason": "without a primary key a row has no identity, so it cannot be updated, deleted or related to",
+      "fix": "add a primary key to public.logs",
+      "entity": "domain.Log",
+      "table": "public.logs",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "code": "E001",
+      "severity": "error",
+      "tier": "column",
+      "message": "domain.Log.Level has no column level in public.logs",
+      "reason": "the field name derives the column level, which public.logs does not have",
+      "fix": "add the column, point the field at an existing one with orm:\"column:<name>\", or exclude it with orm:\"-\"",
+      "entity": "domain.Log",
+      "field": "Level",
+      "go_type": "string",
+      "table": "public.logs",
+      "column": "level",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 10,
+        "column": 2
+      }
+    },
+    {
+      "code": "E016",
+      "severity": "error",
+      "tier": "entity",
+      "message": "table other.things does not exist",
+      "reason": "no table named other.things was introspected",
+      "fix": "create the table, correct the //orm:table directive on domain.Thing, or add its schema to schema.search_path",
+      "entity": "domain.Thing",
+      "table": "other.things",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 18,
+        "column": 1
+      }
+    }
+  ]
+}

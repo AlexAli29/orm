@@ -1,0 +1,2 @@
+	fmt.Fprintf(b, "  concurrent-refresh %s\n", em.ConcurrentRefreshIndex())
+	fmt.Fprintf(b, "  populated %t\n", em.Table.Populated)

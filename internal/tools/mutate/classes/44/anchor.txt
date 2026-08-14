@@ -1,0 +1,1 @@
+	fmt.Fprintf(b, "entity %s table %s.%s\n", entityKey(em), em.Table.Schema, em.Table.Name)

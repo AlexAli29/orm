@@ -1,0 +1,851 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Every PostgreSQL major upstream still supports, which is exactly what
+    # docs/support.md claims. There is no hole in the range: a version listed
+    # as supported and not run against is a claim nobody should believe, and
+    # "14 and 17 both pass" says nothing about 15, 16 or 18.
+    #
+    # 14 leaves this list when upstream ends its support on 12 November 2026.
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['14', '15', '16', '17', '18']
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: orm
+          POSTGRES_PASSWORD: orm
+          POSTGRES_DB: orm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The fixture corpus and the introspection tests build throwaway
+      # databases through this connection. Without it they skip, which keeps
+      # the suite runnable on a machine with no PostgreSQL.
+      ORM_TEST_ADMIN_DSN: postgres://orm:orm@localhost:5432/orm
+      ORM_GENDEMO_DSN: postgres://orm:orm@localhost:5432/gendemo
+      BLOG_DSN: postgres://orm:orm@localhost:5432/blogexample
+      # The managed example builds its own schema from its committed
+      # migrations, so this database starts empty on purpose.
+      JOURNAL_DSN: postgres://orm:orm@localhost:5432/journalexample
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: create the databases the committed generated code is checked against
+        run: |
+          PGPASSWORD=orm psql -h localhost -U orm -d orm -c 'CREATE DATABASE gendemo'
+          PGPASSWORD=orm psql -h localhost -U orm -d gendemo -f internal/gendemo/schema.sql
+          PGPASSWORD=orm psql -h localhost -U orm -d orm -c 'CREATE DATABASE blogexample'
+          PGPASSWORD=orm psql -h localhost -U orm -d blogexample -f examples/blog/schema.sql
+          PGPASSWORD=orm psql -h localhost -U orm -d orm -c 'CREATE DATABASE journalexample'
+
+      - uses: actions/setup-go@v5
+        with:
+          # The floor in go.mod. Raising it is a decision, not a side effect of
+          # a newer toolchain being available.
+          go-version: '1.24'
+          check-latest: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "these files are not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: build
+        run: go build ./...
+
+      - name: vet
+        run: go vet ./...
+
+      # The compile-fail suite and the concurrency audit are both in here. The
+      # first proves that mistakes are compile errors; the second proves that
+      # the descriptors every query shares are never written to.
+      #
+      # The timeout is per package and is raised well above Go's ten-minute
+      # default because these packages genuinely need it. internal/gen/reconcile runs
+      # twenty-one fixtures through the whole pipeline, and the determinism
+      # check runs each of them three times; every one of those is a
+      # go/packages load that type-checks a module from source. On two cores
+      # with the race detector that package takes fourteen minutes.
+      #
+      # Two tests are skipped here and run in the jobs that can satisfy them.
+      # TestCompat_ and TestMutationFixturePrecondition require all five
+      # majors reachable at once and are the `majors` job's; they refuse to
+      # skip themselves on purpose, because a compatibility claim that quietly
+      # proves itself on however many servers happened to be up is worse than
+      # a red job. TestCommittedManifests_areCurrent loads ormtest/postgres,
+      # which declares go 1.25 and cannot be type-checked by a test binary
+      # built on the 1.24 floor; the contract job runs it on 1.25.
+      - name: test
+        run: |
+          set -euo pipefail
+          go test -race -timeout 45m \
+            -skip 'TestCompat_|TestMutationFixturePrecondition|TestCommittedManifests_areCurrent' \
+            $(go list ./... | grep -v '/cmd/orm$')
+
+      # cmd/orm without the race detector, and this is a deliberate trade.
+      #
+      # Its tests drive the generator end to end, and each one type-checks a
+      # whole module from source through go/packages. On two cores with -race
+      # that is a package needing well over thirty minutes — it timed out at
+      # thirty and was still parsing. The concurrency the race detector is here
+      # for is this project's own: the descriptors every query shares, audited
+      # in the root package, which still runs under -race above. What -race
+      # would be watching in cmd/orm is x/tools' errgroup parsing files.
+      #
+      # If that trade ever looks wrong, the fix is one line: fold this back into
+      # the run above and raise the timeout past sixty minutes.
+      - name: the CLI suite, which type-checks modules from source
+        run: |
+          set -euo pipefail
+          go test -timeout 45m \
+            -skip 'TestCompat_|TestMutationFixturePrecondition' \
+            ./cmd/orm
+
+      # -run takes an unanchored regular expression, so "TestFixtures" also
+      # selects TestFixtures_deterministic and runs every fixture three more
+      # times. This step is about the goldens on disk; the determinism check
+      # already ran under -race above.
+      - name: check the reconciliation goldens are reproducible
+        run: |
+          go test ./internal/gen/reconcile/ -run 'TestFixtures$' -count=1
+          git diff --exit-code -- testdata/
+
+      # The managed example's schema comes from its committed migrations rather
+      # than from a DDL file applied by hand. Running them here is both the
+      # setup for the steps below and the proof that the committed artifacts
+      # apply to an empty database.
+      - name: apply the managed example's migrations
+        run: |
+          go run ./cmd/orm migrate --plan --config examples/managed/orm.yaml
+          go run ./cmd/orm migrate --config examples/managed/orm.yaml
+          go run ./cmd/orm showmigrations --config examples/managed/orm.yaml
+
+      # A declaration with no migration behind it fails the build. This is the
+      # step a managed project puts in its own CI.
+      - name: check every declaration is represented by a migration
+        run: |
+          go run ./cmd/orm makemigrations --check --config examples/managed/orm.yaml
+          go run ./cmd/orm check --config examples/managed/orm.yaml --generated
+
+      # Migration generation is deterministic: the same declarations against the
+      # same history produce the same operations, every time. Without that, two
+      # developers on one branch would get two different migrations.
+      - name: check migration generation is deterministic
+        run: |
+          go run ./cmd/orm makemigrations --dry-run --sql --config examples/managed/orm.yaml > /tmp/plan-a.txt
+          go run ./cmd/orm makemigrations --dry-run --sql --config examples/managed/orm.yaml > /tmp/plan-b.txt
+          diff -u /tmp/plan-a.txt /tmp/plan-b.txt
+          go run ./cmd/orm inspect --json --config examples/managed/orm.yaml > /tmp/schema-a.json
+          go run ./cmd/orm inspect --json --config examples/managed/orm.yaml > /tmp/schema-b.json
+          diff -u /tmp/schema-a.json /tmp/schema-b.json
+
+      # Generation is deterministic, so regenerating must produce no diff. The
+      # lock is written by the same command and is covered by the same check.
+      - name: check the committed generated code is current
+        run: |
+          go run ./cmd/orm generate --config internal/gendemo/orm.yaml
+          go run ./cmd/orm generate --config examples/blog/orm.yaml
+          go run ./cmd/orm generate --config examples/managed/orm.yaml
+          git diff --exit-code -- internal/gendemo/ examples/
+
+      # The other half of the same question: the fingerprint says the mapping
+      # changed, the diff above says the output did. Both must be quiet.
+      - name: check the mapping fingerprint matches the lock
+        run: |
+          go run ./cmd/orm check --config internal/gendemo/orm.yaml --generated
+          go run ./cmd/orm check --config examples/blog/orm.yaml --generated
+
+      # Every input that arrives as bytes somebody else wrote: a raw SQL
+      # fragment, an identifier, and a migration file that may have been edited
+      # by hand. None of them may panic, hang, or be misread.
+      - name: fuzz the inputs that come from callers
+        run: |
+          go test -run '^$' -fuzz FuzzScanPlaceholders -fuzztime 30s ./internal/expr/
+          go test -run '^$' -fuzz FuzzIdentifier -fuzztime 30s ./internal/expr/
+          go test -run '^$' -fuzz FuzzArtifact -fuzztime 30s ./gen/migrate/
+
+      # Compiled and measured, so a regression in the work between the caller
+      # and pgx shows up as a build failure rather than as nothing.
+      - name: benchmarks compile and run
+        run: go test -run '^$' -bench . -benchtime 10x ./...
+
+      # The ecosystem modules have go.mod files of their own, so ./... in the
+      # core module does not reach them. That separation is the point — a
+      # project importing only the ORM compiles none of OpenTelemetry or
+      # Testcontainers — but it means CI has to enter each one explicitly or
+      # they would never be built at all.
+      #
+      # ormtest/postgres is not run here: it starts containers, and this job
+      # already has PostgreSQL as a service. It is still built, because a module
+      # nothing compiles is a module nothing checks.
+      #
+      # It is also the one module whose floor is above the project's 1.24 —
+      # Testcontainers pulls in grpc-gateway, which declares 1.25 — so building
+      # it relies on Go fetching that toolchain itself. GOTOOLCHAIN is left at
+      # its default of auto for exactly that, and the step below proves the
+      # modules that matter for a *library consumer* still build on 1.24.
+      - name: the ecosystem modules build and pass
+        run: |
+          for mod in ormotel ormextdemo; do
+            echo "== $mod"
+            ( cd "$mod" && go build ./... && go vet ./... && go test -count=1 ./... )
+          done
+          ( cd ormtest/postgres && go build ./... && go vet ./... )
+
+      # The uuid qualification is a module of its own, because uuid reaches Go
+      # through a configured mapping and the chosen package is a consumer's
+      # dependency rather than the ORM's. A nested module is not traversed by
+      # the parent's ./..., so without this step the proof would exist and never
+      # run — which is worse than not having it, because the tree would look
+      # covered.
+      #
+      # The suite fails rather than skips when the database is missing, so this
+      # step cannot pass by executing nothing.
+      #
+      # The configured mapping must stay a consumer's choice. If google/uuid
+      # ever appears in the ORM's own module graph, every project importing the
+      # ORM acquires it — which is the thing configured type mappings exist to
+      # avoid.
+      - name: the ORM module does not depend on google/uuid
+        run: |
+          if grep -q "google/uuid" go.mod go.sum; then
+            echo "the ORM module acquired a dependency on google/uuid"
+            grep -n "google/uuid" go.mod go.sum
+            exit 1
+          fi
+          grep -q "google/uuid" uuidcompat/go.mod || {
+            echo "the uuid fixture does not use google/uuid, so it proves nothing"; exit 1; }
+          echo "google/uuid is a consumer dependency, as intended"
+
+      # The project's floor is the go directive in the core go.mod. A dependency
+      # that raised it would raise it for every consumer, so it is checked rather
+      # than trusted: these three must build with 1.24 and nothing newer.
+      - name: the core and the library modules build on the declared floor
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          for mod in . ormotel ormextdemo; do
+            echo "== $mod"
+            ( cd "$mod" && go build ./... )
+          done
+
+      # The extension SDK's central claim, checked as its own step so that a
+      # failure says what broke rather than being one line inside a test run:
+      # a third-party extension reaches nothing internal, and the compiler is
+      # what enforces it.
+      #
+      # The failure has to be checked for its reason, not only for its exit
+      # code. A probe that fails because the module graph needs updating, or
+      # because of a typo in the probe itself, is a build failure that proves
+      # nothing — and it would keep this step green for exactly as long as the
+      # unrelated breakage lasted. So the message is matched.
+      - name: a third-party extension cannot reach internals
+        run: |
+          set -uo pipefail
+          cd ormextdemo
+          cat > zz_internal_probe.go <<'PROBE'
+          package ormextdemo
+
+          import _ "github.com/AlexAli29/orm/internal/expr"
+          PROBE
+          # GitHub runs a `run:` step with `bash -e`, which the script cannot
+          # see and `set -uo pipefail` does not undo. This build is *expected*
+          # to fail, so capturing it under -e kills the step at this line: no
+          # output, exit 1, and nothing in the log to say which of the two
+          # outcomes below happened. Turn -e off around the one command whose
+          # failure is the point.
+          set +e
+          out=$(go build ./... 2>&1)
+          rc=$?
+          set -e
+          rm -f zz_internal_probe.go
+
+          echo "go build exit status: $rc"
+          echo "go build said:"
+          echo "${out:-(nothing)}"
+          echo "---"
+
+          if [ $rc -eq 0 ]; then
+            echo "a package outside the ORM imported internal/expr; the SDK boundary is not enforced"
+            exit 1
+          fi
+          # A herestring rather than a pipeline: `echo ... | grep -q` can be
+          # killed by SIGPIPE when grep matches and exits, and pipefail then
+          # reports that as the pipeline's status.
+          if ! grep -q "use of internal package" <<<"$out"; then
+            echo "the build failed, but not because of the internal rule"
+            exit 1
+          fi
+          echo "the compiler refused the internal import, as it should"
+
+      # A project that imports only the ORM must not acquire the ecosystem's
+      # dependencies. This is the property the extra go.mod files exist for, so
+      # it is checked rather than assumed.
+      - name: the core module stays free of ecosystem dependencies
+        run: |
+          if go list -deps . | grep -E '^(go\.opentelemetry\.io|github\.com/testcontainers|github\.com/gin-gonic|github\.com/gofiber|github\.com/go-chi)'; then
+            echo "the core module now depends on an ecosystem package"
+            exit 1
+          fi
+          if grep -qE 'opentelemetry|testcontainers|gin-gonic|gofiber|go-chi' go.mod; then
+            echo "go.mod acquired an ecosystem dependency"
+            exit 1
+          fi
+          echo "the core module depends on neither OpenTelemetry nor Testcontainers"
+
+  # Everything that needs more than one major at a time.
+  #
+  # The job above runs the whole suite against one server per row, which is what
+  # proves each major works. It cannot prove that they agree with each other: a
+  # claim like "an artifact generated on 14 is byte-identical to one generated on
+  # 18" needs every server reachable from one process, and the tests that make it
+  # refuse to run on fewer than five rather than reporting a five-major result
+  # proven by however many happened to be up.
+  #
+  # The uuid qualification lives here for the same reason. Its cross-major
+  # capture is part of go test ./... inside that module, so pointing the script
+  # at a single server would fail — correctly, and uselessly.
+  majors:
+    runs-on: ubuntu-latest
+
+    services:
+      pg14:
+        image: postgres:14
+        env:
+          POSTGRES_USER: orm
+          POSTGRES_PASSWORD: orm
+          POSTGRES_DB: orm
+        ports:
+          - 5414:5432
+        options: >-
+          --health-cmd "pg_isready -U orm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      pg15:
+        image: postgres:15
+        env:
+          POSTGRES_USER: orm
+          POSTGRES_PASSWORD: orm
+          POSTGRES_DB: orm
+        ports:
+          - 5415:5432
+        options: >-
+          --health-cmd "pg_isready -U orm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      pg16:
+        image: postgres:16
+        env:
+          POSTGRES_USER: orm
+          POSTGRES_PASSWORD: orm
+          POSTGRES_DB: orm
+        ports:
+          - 5416:5432
+        options: >-
+          --health-cmd "pg_isready -U orm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      pg17:
+        image: postgres:17
+        env:
+          POSTGRES_USER: orm
+          POSTGRES_PASSWORD: orm
+          POSTGRES_DB: orm
+        ports:
+          - 5417:5432
+        options: >-
+          --health-cmd "pg_isready -U orm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      pg18:
+        image: postgres:18
+        env:
+          POSTGRES_USER: orm
+          POSTGRES_PASSWORD: orm
+          POSTGRES_DB: orm
+        ports:
+          - 5418:5432
+        options: >-
+          --health-cmd "pg_isready -U orm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ORM_TEST_ADMIN_DSN: postgres://orm:orm@localhost:5417/orm
+      ORM_TEST_DSN_PG14: postgres://orm:orm@localhost:5414/orm
+      ORM_TEST_DSN_PG15: postgres://orm:orm@localhost:5415/orm
+      ORM_TEST_DSN_PG16: postgres://orm:orm@localhost:5416/orm
+      ORM_TEST_DSN_PG17: postgres://orm:orm@localhost:5417/orm
+      ORM_TEST_DSN_PG18: postgres://orm:orm@localhost:5418/orm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: the compatibility matrix, with every supported major reachable
+        run: go test -count=1 ./cmd/orm -run 'TestCompat_|TestMutationFixturePrecondition'
+
+      # The whole sequence is one script, and it is the same script a developer
+      # runs. A qualification reproduced locally by a different sequence from the
+      # one that gates it is two things that can disagree, and the one that
+      # disagrees quietly is the one nobody runs.
+      #
+      # It builds the CLI in the ORM module and invokes it as a binary. Running
+      # go run ../cmd/orm from inside uuidcompat asks that module's graph to
+      # supply the generator's build dependencies — golang.org/x/tools — which it
+      # does not have and should not: a consumer that installs the tool does not
+      # take on what the tool is built from. TestQualifyScript_isTheShapeCIRuns
+      # in the root module fails if this step stops calling the script.
+      - name: uuid qualification, including the five-major capture
+        run: ./uuidcompat/qualify.sh 'postgres://orm:orm@localhost:5417/postgres' uuidcompat
+
+      - name: the same uuid module under the race detector
+        env:
+          UUIDCOMPAT_DSN: postgres://orm:orm@localhost:5417/uuidcompat
+        run: cd uuidcompat && go test -race -count=1 ./...
+
+  # PostGIS is a support claim, and until now nothing proved it.
+  #
+  # The matrix above runs the plain postgres image, which has no PostGIS. The
+  # spatial suite is written to skip when the extension is unavailable — right
+  # on a developer's machine, wrong here — so all 49 of its tests skipped in
+  # every job and the matrix was green without one spatial assertion having run.
+  # A support claim nothing exercises is a claim nobody should believe.
+  #
+  # This job runs the combinations the project actually claims. Two things stop
+  # it going quietly green: ORM_REQUIRE_POSTGIS turns the skip into a failure,
+  # and the expectation variables make the suite assert the server's own
+  # reported versions match the ones this row configured — so a wrong or moved
+  # image tag fails loudly instead of passing as something it is not.
+  postgis:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - postgres: '17'
+            postgis: '3.5'
+          - postgres: '16'
+            postgis: '3.4'
+          - postgres: '14'
+            postgis: '3.4'
+
+    services:
+      postgres:
+        image: postgis/postgis:${{ matrix.postgres }}-${{ matrix.postgis }}
+        env:
+          POSTGRES_USER: orm
+          POSTGRES_PASSWORD: orm
+          POSTGRES_DB: orm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ORM_TEST_ADMIN_DSN: postgres://orm:orm@localhost:5432/orm
+      ORM_REQUIRE_POSTGIS: '1'
+      ORM_EXPECT_POSTGRES_MAJOR: ${{ matrix.postgres }}
+      ORM_EXPECT_POSTGIS_VERSION: ${{ matrix.postgis }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          check-latest: true
+
+      - name: the spatial suite, against the version this row declares
+        run: go test -count=1 -timeout 20m ./internal/gisdemo/ ./postgis/
+
+      - name: the managed PostGIS view workflow, end to end
+        # ORM_REQUIRE_POSTGIS makes an absent extension a failure rather than a
+        # skip, so this job cannot go green without the workflow having run.
+        run: go test -count=1 -timeout 20m ./cmd/orm/ -run 'TestPostGIS_'
+
+
+      - name: the same suite under the race detector
+        run: go test -race -count=1 -timeout 30m ./internal/gisdemo/
+
+  # The production examples are separate Go modules, so nothing above compiles
+  # them. They are the release's claim that this ORM can be used in a real
+  # service, and a claim nothing builds is a claim nobody should believe.
+  #
+  # This job is deliberately cheap and has no database: it answers "does it
+  # compile, is it formatted, does vet pass" for every example module, and it
+  # answers fast. The integration job below is the expensive one.
+  examples-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # This job handles the modules that declare go 1.25 —
+          # ormtest/postgres because Testcontainers requires it, and the
+          # examples because their dependencies do. A tool built with an older
+          # Go cannot type-check such a module whatever GOTOOLCHAIN says: the
+          # limit is the tool's own build version, not the toolchain in PATH.
+          #
+          # This is not the library's floor. That claim is docs/support.md's and
+          # it is proven by the minimum-go job, which pins GOTOOLCHAIN=local and
+          # touches only the modules that are on the floor.
+          go-version: '1.25'
+          check-latest: true
+
+      - name: every example module builds, vets and is gofmt-clean
+        run: |
+          set -euo pipefail
+          for mod in examples/production examples/hexagonal; do
+            echo "== $mod"
+            (
+              cd "$mod"
+              unformatted=$(gofmt -l .)
+              if [ -n "$unformatted" ]; then
+                echo "these files are not gofmt-clean:"
+                echo "$unformatted"
+                exit 1
+              fi
+              go build ./...
+              go vet ./...
+              # The test files too: a test that stopped compiling is a test that
+              # stopped running, and `go build` does not notice.
+              go test -run '^$' ./...
+            )
+          done
+
+      # The examples are external consumers, and the way that is enforced is
+      # that they are separate modules — Go's own internal rule then refuses an
+      # import of the ORM's internals. That is worth checking rather than
+      # assuming, because a `replace` directive plus a moved file could quietly
+      # make it untrue.
+      #
+      # As with the extension probe, the reason is matched rather than the exit
+      # code alone: a build that failed for an unrelated reason would otherwise
+      # keep this step green while proving nothing.
+      - name: an example cannot reach the ORM's internals
+        run: |
+          set -uo pipefail
+          cd examples/production
+          cat > zz_internal_probe.go <<'PROBE'
+          package production
+
+          import _ "github.com/AlexAli29/orm/internal/expr"
+          PROBE
+          # GitHub runs a `run:` step with `bash -e`, which the script cannot
+          # see and `set -uo pipefail` does not undo. This build is *expected*
+          # to fail, so capturing it under -e kills the step at this line: no
+          # output, exit 1, and nothing in the log to say which of the two
+          # outcomes below happened. Turn -e off around the one command whose
+          # failure is the point.
+          set +e
+          out=$(go build ./... 2>&1)
+          rc=$?
+          set -e
+          rm -f zz_internal_probe.go
+
+          # Everything this step learned, before it decides anything. A step
+          # that can exit non-zero without saying why costs a whole CI round
+          # trip to diagnose, and this one did twice.
+          echo "go build exit status: $rc"
+          echo "go build said:"
+          echo "${out:-(nothing)}"
+          echo "---"
+
+          if [ $rc -eq 0 ]; then
+            echo "an example imported internal/expr; the module boundary is not doing its job"
+            exit 1
+          fi
+          # A herestring rather than a pipeline. `echo ... | grep -q` is a
+          # pipeline whose left side can be killed by SIGPIPE the moment grep
+          # matches and exits, and `set -o pipefail` then reports that signal as
+          # the pipeline's status — so a match can read as a miss, depending on
+          # how much output there was and how the shell buffered it.
+          if ! grep -q "use of internal package" <<<"$out"; then
+            echo "the build failed, but not because of the internal rule"
+            exit 1
+          fi
+          echo "the compiler refused the internal import, as it should"
+
+  # The examples against a real PostgreSQL, on every version the project claims.
+  #
+  # This job has no `services:` block on purpose. The examples start their own
+  # database through ormtest/postgres, which is Testcontainers — so this is also
+  # the proof that the testing toolkit works on a machine that was given nothing
+  # but Docker, which is what a consumer's CI looks like.
+  examples-integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['14', '15', '16', '17', '18']
+    env:
+      # ormtest/postgres reads this to decide which server the examples run
+      # against, so the matrix is real rather than decorative.
+      ORM_TEST_POSTGRES_IMAGE: postgres:${{ matrix.postgres }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # This job handles the modules that declare go 1.25 —
+          # ormtest/postgres because Testcontainers requires it, and the
+          # examples because their dependencies do. A tool built with an older
+          # Go cannot type-check such a module whatever GOTOOLCHAIN says: the
+          # limit is the tool's own build version, not the toolchain in PATH.
+          #
+          # This is not the library's floor. That claim is docs/support.md's and
+          # it is proven by the minimum-go job, which pins GOTOOLCHAIN=local and
+          # touches only the modules that are on the floor.
+          go-version: '1.25'
+          check-latest: true
+
+      - name: docker is present, which is all these tests are given
+        run: docker version
+
+      - name: the production example passes against a real database
+        run: |
+          cd examples/production
+          go test -race -count=1 -timeout 25m ./...
+
+      - name: the hexagonal example passes against a real database
+        run: |
+          cd examples/hexagonal
+          go test -race -count=1 -timeout 25m ./...
+
+  # The examples' committed generated code and migrations must match their
+  # declarations, for the same reason the core's must: generated output that
+  # has drifted from its source is output nobody can regenerate.
+  #
+  # This one needs a database it can create schemas in, so it uses a service
+  # rather than Testcontainers.
+  examples-generation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: orm
+          POSTGRES_PASSWORD: orm
+          POSTGRES_DB: orm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PRODUCTION_EXAMPLE_DSN: postgres://orm:orm@localhost:5432/productionexample
+      HEXAGONAL_EXAMPLE_DSN: postgres://orm:orm@localhost:5432/hexagonalexample
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # This job handles the modules that declare go 1.25 —
+          # ormtest/postgres because Testcontainers requires it, and the
+          # examples because their dependencies do. A tool built with an older
+          # Go cannot type-check such a module whatever GOTOOLCHAIN says: the
+          # limit is the tool's own build version, not the toolchain in PATH.
+          #
+          # This is not the library's floor. That claim is docs/support.md's and
+          # it is proven by the minimum-go job, which pins GOTOOLCHAIN=local and
+          # touches only the modules that are on the floor.
+          go-version: '1.25'
+          check-latest: true
+
+      - name: create the examples' databases
+        run: |
+          PGPASSWORD=orm psql -h localhost -U orm -d orm -c 'CREATE DATABASE productionexample'
+          PGPASSWORD=orm psql -h localhost -U orm -d orm -c 'CREATE DATABASE hexagonalexample'
+
+      # The committed migrations apply to an empty database. This is both the
+      # setup for the checks below and the thing a reader of the example is
+      # promised: clone it, migrate, run.
+      - name: the committed migrations apply
+        run: |
+          go run ./cmd/orm migrate --config examples/production/orm.yaml
+          go run ./cmd/orm migrate --config examples/hexagonal/orm.yaml
+          go run ./cmd/orm showmigrations --config examples/production/orm.yaml
+          go run ./cmd/orm showmigrations --config examples/hexagonal/orm.yaml
+
+      # A declaration with no migration behind it fails the build. This is the
+      # step these examples exist to demonstrate, so it runs on them.
+      - name: every declaration is represented by a migration
+        run: |
+          go run ./cmd/orm makemigrations --check --config examples/production/orm.yaml
+          go run ./cmd/orm makemigrations --check --config examples/hexagonal/orm.yaml
+
+      # And the schema the migrations produced is the schema the declarations
+      # describe, which is a different question from whether a migration exists.
+      - name: the database agrees with the declarations
+        run: |
+          go run ./cmd/orm check --config examples/production/orm.yaml --generated
+          go run ./cmd/orm check --config examples/hexagonal/orm.yaml --generated
+
+      - name: the committed generated code is current
+        run: |
+          go run ./cmd/orm generate --config examples/production/orm.yaml
+          go run ./cmd/orm generate --config examples/hexagonal/orm.yaml
+          git diff --exit-code -- examples/
+
+  # The declared minimum Go, with the toolchain pinned so it cannot quietly
+  # upgrade itself.
+  #
+  # GOTOOLCHAIN=local is the whole point. Left at its default of auto, Go
+  # downloads whatever a go.mod asks for and the job proves nothing about the
+  # floor: a standard-library function added in a later release would compile
+  # here and fail for a user who has only the version this project claims to
+  # need.
+  minimum-go:
+    runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # The floor from go.mod. docs/support.md explains why it is below the
+          # two releases Go upstream supports.
+          go-version: '1.24'
+          check-latest: true
+
+      - name: the core and the library modules build on the floor
+        run: |
+          set -euo pipefail
+          for mod in . ormotel ormextdemo; do
+            echo "== $mod"
+            ( cd "$mod" && go build ./... && go vet ./... )
+          done
+
+      # The unit tests that need no database, on the floor. A newer stdlib API
+      # would fail to compile here, which is what this job is for.
+      - name: the tests compile and the database-free ones pass on the floor
+        run: go test -count=1 -run 'Test[^I]' ./internal/expr/... ./plan/... ./diagnostics/... ./observe/...
+
+  # Current stable Go, so the project does not rot between floor bumps.
+  current-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: build and vet every module on current stable
+        run: |
+          set -euo pipefail
+          for mod in . ormotel ormextdemo ormtest/postgres examples/production examples/hexagonal; do
+            echo "== $mod"
+            ( cd "$mod" && go build ./... && go vet ./... )
+          done
+
+  # The v1 contract gates. They need no database, so they are their own job and
+  # they fail fast.
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # This job handles the modules that declare go 1.25 —
+          # ormtest/postgres because Testcontainers requires it, and the
+          # examples because their dependencies do. A tool built with an older
+          # Go cannot type-check such a module whatever GOTOOLCHAIN says: the
+          # limit is the tool's own build version, not the toolchain in PATH.
+          #
+          # This is not the library's floor. That claim is docs/support.md's and
+          # it is proven by the minimum-go job, which pins GOTOOLCHAIN=local and
+          # touches only the modules that are on the floor.
+          go-version: '1.25'
+          check-latest: true
+
+      # The public API is a committed file. Any change to the exported surface
+      # has to appear as a diff to api/, which is what makes it reviewable.
+      - name: the public API matches the committed manifest
+        run: |
+          set -euo pipefail
+          go run ./internal/tools/apimanifest -dir . -out api/orm.txt ./...
+          go run ./internal/tools/apimanifest -dir ./ormotel -out api/ormotel.txt ./...
+          go run ./internal/tools/apimanifest -dir ./ormtest/postgres -out api/ormtest-postgres.txt ./...
+          git diff --exit-code -- api/
+
+      # The manifest tool is itself tested: it must notice a removed symbol, a
+      # changed signature, a tightened constraint and a method added to an
+      # interface consumers implement.
+      - name: the manifest notices breaking changes
+        run: go test -count=1 ./internal/tools/apimanifest/
+      - name: release readiness
+        run: |
+          go test -count=1 ./internal/tools/releasecheck/
+          go run ./internal/tools/releasecheck
+
+
+      # Diagnostic codes are machine-observable API: no duplicates, nothing
+      # emitted that is not registered, no code reused for a new meaning.
+      - name: the diagnostic register is sound
+        run: go test -count=1 ./gen/diag/
+
+      # A mutation anchor is a literal quotation of the code it mutates, so
+      # editing that code silently invalidates it — and an anchor that matches
+      # nothing makes its class look like a survivor. This asks every class at
+      # once and touches nothing, which is why it can run on every push while a
+      # campaign cannot.
+      - name: every mutation anchor still quotes its code
+        run: |
+          go run ./internal/tools/mutate anchors -repo . \
+            -manifest internal/tools/mutate/manifest.json \
+            -manifest internal/tools/mutate/uuidmanifest.json \
+            -manifest internal/tools/mutate/unionmanifest.json \
+            -manifest internal/tools/mutate/sourcemanifest.json \
+            -manifest internal/tools/mutate/valuemanifest.json \
+            -manifest internal/tools/mutate/ordermanifest.json \
+            -manifest internal/tools/mutate/auditmanifest.json
+
+      # The campaigns' accounting comes from the manifests rather than from
+      # prose: every class terminal, every evidence dimension proven, the
+      # arithmetic closing.
+      - name: the mutation campaigns still add up
+        run: |
+          for m in manifest uuidmanifest unionmanifest sourcemanifest \
+                   valuemanifest ordermanifest auditmanifest; do
+            go run ./internal/tools/mutate totals \
+              -manifest "internal/tools/mutate/$m.json"
+          done
+
+      # Every exported symbol in a public package carries documentation that
+      # says something its name does not.
+      - name: every public symbol is documented
+        run: go run ./internal/tools/godoclint -dir . ./...

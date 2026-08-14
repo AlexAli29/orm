@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 4,
+    "errors": 4,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E009",
+      "severity": "error",
+      "tier": "relation",
+      "message": "domain.Post.Author is ambiguous: posts_author_fkey, posts_editor_fkey",
+      "reason": "2 foreign keys could back it: 2 on public.posts and 0 on public.users",
+      "fix": "pin the constraint with orm:\"fk:posts_author_fkey\"",
+      "entity": "domain.Post",
+      "field": "Author",
+      "table": "public.posts",
+      "relation": "Author",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 27,
+        "column": 2
+      }
+    },
+    {
+      "code": "E008",
+      "severity": "error",
+      "tier": "relation",
+      "message": "domain.Post.Wrong names the constraint posts_reviewer_fkey, which does not relate public.posts and public.users",
+      "reason": "the constraints that do relate them are posts_author_fkey, posts_editor_fkey",
+      "fix": "name one of the constraints listed above, or add the missing foreign key",
+      "entity": "domain.Post",
+      "field": "Wrong",
+      "table": "public.posts",
+      "relation": "Wrong",
+      "constraint": "posts_reviewer_fkey",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 31,
+        "column": 2
+      }
+    },
+    {
+      "code": "E008",
+      "severity": "error",
+      "tier": "relation",
+      "message": "domain.Post.Tag has no foreign key between public.posts and public.tags",
+      "reason": "a relation is a fact about the schema; without a foreign key there is nothing to derive it from",
+      "fix": "add a foreign key between public.posts and public.tags",
+      "entity": "domain.Post",
+      "field": "Tag",
+      "table": "public.posts",
+      "relation": "Tag",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 33,
+        "column": 2
+      }
+    },
+    {
+      "code": "E008",
+      "severity": "error",
+      "tier": "relation",
+      "message": "domain.Post.Backwards asks for side:remote, but public.users has no foreign key to public.posts",
+      "reason": "the foreign key between them is posts_author_fkey, posts_editor_fkey, on public.posts, which side:remote excludes",
+      "fix": "drop the side: tag and let the catalog decide, or write side:local",
+      "entity": "domain.Post",
+      "field": "Backwards",
+      "table": "public.posts",
+      "relation": "Backwards",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 36,
+        "column": 2
+      }
+    }
+  ]
+}

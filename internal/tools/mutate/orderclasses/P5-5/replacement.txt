@@ -1,0 +1,4 @@
+			if i > 0 {
+				break
+			}
+			// A bare identifier, not a qualified one: it names a column of the

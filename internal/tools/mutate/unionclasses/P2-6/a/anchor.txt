@@ -1,0 +1,2 @@
+	if !q.shape.known() {
+		// A query built with Rows selects declarations and has no typed result:

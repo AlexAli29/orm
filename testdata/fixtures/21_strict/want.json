@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "W003",
+      "severity": "error",
+      "tier": "column",
+      "message": "column public.events.note is not mapped",
+      "reason": "the column is nullable, so inserts succeed without it, but its value cannot be read back",
+      "fix": "add a field for note to domain.Event, or leave it unmapped on purpose and set strict.unmapped_columns: off",
+      "entity": "domain.Event",
+      "table": "public.events",
+      "column": "note",
+      "pg_type": "text",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 8,
+        "column": 1
+      }
+    }
+  ]
+}

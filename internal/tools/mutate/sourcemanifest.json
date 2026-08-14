@@ -1,0 +1,900 @@
+{
+  "comment": [
+    "UNION ALL phase 3: a compound as a row source and as an ordinary CTE body.",
+    "",
+    "Nine classes. They attack what phase 3 introduced — the source term, the",
+    "output names a compound provides, the every-column-named rule, and the",
+    "non-recursive CTE path — plus the three compiler rules that phase 3 is the",
+    "first thing to make reachable from the public API: nested parenthesisation,",
+    "global placeholder numbering, and the parameters an enclosing statement had",
+    "already collected.",
+    "",
+    "Kept apart from manifest.json, uuidmanifest.json and unionmanifest.json, whose",
+    "accounting is closed. UNION ALL is not frozen and this is not the UNION",
+    "manifest; it is the focused set for one integration slice.",
+    "",
+    "Every killer runs in the root module and needs no database. The server-side",
+    "proof is in internal/gendemo/m16_unionsource_test.go, which is not part of",
+    "this campaign."
+  ],
+  "evidence_commit": "ab3e1df",
+  "evidence_commit_note": [
+    "ab3e1df is the revision every UNION ALL class was last applied to and run at, in a",
+    "worktree checked out at exactly that commit, with the manifests read and written",
+    "outside it so the tree stayed clean between classes. It is kept reachable as",
+    "archive/m16-union-mutation-evidence.",
+    "",
+    "The five UNION ALL campaigns were rerun together at one revision after `mutate",
+    "anchors` found four anchors that later phases had silently invalidated by editing",
+    "the code they quote. An anchor that no longer matches makes its class look like a",
+    "survivor, so the campaigns were pinned to revisions where they no longer ran.",
+    "They run again, and three harness controls were active: anchors still quote their",
+    "code, every site names the function its anchor is inside, and each semantic probe",
+    "survives every mutation in another function."
+  ],
+  "not_expressible": [
+    {
+      "id": "P3-X1",
+      "name": "A foreign implementation of the sealed source interface is accepted",
+      "why": [
+        "SourceTerm is closed by an unexported method, so a type outside the",
+        "package cannot satisfy it and no code runs to decide whether it does.",
+        "There is nothing to mutate: the rule is the Go compiler's. It is asserted",
+        "instead by the compile-fail case \"a type outside the package claiming to",
+        "be a row source\", which compiles a whole program and requires it to fail."
+      ]
+    },
+    {
+      "id": "P3-X2",
+      "name": "Recursive CTE validation accepts a compound without validating it",
+      "why": [
+        "recursiveCTE takes a Term and passes two *expr.Select values to",
+        "ValidateRecursive. A compound is not a Select and there is no assignment",
+        "that would make it one, so the defect cannot be written. It is asserted by",
+        "the compile-fail case \"a set operation as a recursive CTE's anchor\".",
+        "",
+        "Deleting the ValidateRecursive call would be a real mutation, but it is a",
+        "mutation of the recursive path, which this phase deliberately did not",
+        "touch. It belongs to whichever phase takes recursive CTEs on."
+      ]
+    }
+  ],
+  "classes": [
+    {
+      "id": "P3-1",
+      "batch": "P3",
+      "name": "A set operation whose first branch names no column becomes a source anyway",
+      "mutation": {
+        "file": "union.go",
+        "anchor": "sourceclasses/P3-1/anchor.txt",
+        "replacement": "sourceclasses/P3-1/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The compound-specific check that the first branch names its columns is",
+          "dropped. PostgreSQL takes a compound's output names from branch 1, so a",
+          "union whose first branch names nothing has nothing for a source's columns",
+          "to be addressed by, and the caller is no longer told which branch to fix."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-1"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-1$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSource_compoundRefusesAFirstBranchThatNamesNothing"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSource_compoundRefusesAFirstBranchThatNamesNothing$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionSource_refusesAUnionWhoseFirstBranchNamesNothing"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionSource_refusesAUnionWhoseFirstBranchNamesNothing$"
+        ]
+      },
+      "note": [
+        "The second guard, namedOutputs, still refuses the source — but with a",
+        "diagnostic that says a column has no name rather than which branch names",
+        "it. The killer asserts the diagnostic, so what it proves is that the",
+        "compound-specific rule is present and not merely that something refused."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "union.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSource_compoundRefusesAFirstBranchThatNamesNothing"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionSource_refusesAUnionWhoseFirstBranchNamesNothing"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P3-2",
+      "batch": "P3",
+      "name": "A compound source is built from its first branch alone",
+      "mutation": {
+        "file": "union.go",
+        "anchor": "sourceclasses/P3-2/anchor.txt",
+        "replacement": "sourceclasses/P3-2/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The source contributes the first branch instead of the whole compound, so",
+          "a derived table or a CTE over a union silently becomes one over half of",
+          "it: valid SQL, the right column names, and the other branch's rows gone."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-2"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-2$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSource_compoundNamesItsColumnsAfterTheFirstBranch"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSource_compoundNamesItsColumnsAfterTheFirstBranch$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionSource_isAnOrdinaryCTEBody"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionSource_isAnOrdinaryCTEBody$"
+        ]
+      },
+      "note": [
+        "The killer is the CTE case rather than the derived-table one because a",
+        "WITH item is where losing a branch is least visible: the body is written",
+        "once and referred to by name, so nothing downstream reads differently."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "union.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSource_compoundNamesItsColumnsAfterTheFirstBranch"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionSource_isAnOrdinaryCTEBody"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P3-3",
+      "batch": "P3",
+      "name": "A row source stops requiring every column to be named",
+      "mutation": {
+        "file": "subquery.go",
+        "anchor": "sourceclasses/P3-3/anchor.txt",
+        "replacement": "sourceclasses/P3-3/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The one rule about output names stops refusing a column that has none, so",
+          "a derived table or a CTE is built with a column nothing can address and",
+          "the caller finds out from a different error further along."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-3"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-3$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSource_namedOutputsRefusesAnUnnamedColumn"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSource_namedOutputsRefusesAnUnnamedColumn$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionSource_refusesASelectListThatNamesNothing"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionSource_refusesASelectListThatNamesNothing$"
+        ]
+      },
+      "note": [
+        "The killer asserts the diagnostic, not merely that the statement failed.",
+        "Under the mutant it still fails — the source has a column called \"\" and",
+        "the projection asks for one called \"label\" — but for a reason that does",
+        "not tell the caller what to fix, which is the defect."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 3,
+        "killer_passed": 3,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "subquery.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSource_namedOutputsRefusesAnUnnamedColumn"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionSource_refusesASelectListThatNamesNothing",
+          "TestUnionSource_refusesASelectListThatNamesNothing/as_a_CTE_body",
+          "TestUnionSource_refusesASelectListThatNamesNothing/as_a_derived_table"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P3-4",
+      "batch": "P3",
+      "name": "A composed query reports no output names when it becomes a source",
+      "mutation": {
+        "file": "composed.go",
+        "anchor": "sourceclasses/P3-4/anchor.txt",
+        "replacement": "sourceclasses/P3-4/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The names cross the boundary from the select list to the source, and this",
+          "drops them there. It is the regression the widening of Sub and CTE could",
+          "have caused: the ordinary derived table, which has nothing to do with set",
+          "operations, stops working."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-4"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-4$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSource_composedQueryReportsItsSelectListNames"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSource_composedQueryReportsItsSelectListNames$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionSource_theOtherBuildersAreStillSources"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionSource_theOtherBuildersAreStillSources$"
+        ]
+      },
+      "note": [
+        "The killer is the no-regression test for the three builders that were",
+        "sources before this phase, which is the right level: what this mutation",
+        "breaks is not the new feature but the old one it was threaded through."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 4,
+        "killer_passed": 4,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "composed.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSource_composedQueryReportsItsSelectListNames"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionSource_theOtherBuildersAreStillSources",
+          "TestUnionSource_theOtherBuildersAreStillSources/ComposedQuery",
+          "TestUnionSource_theOtherBuildersAreStillSources/a_Rows_query,_which_has_no_result_type"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P3-5",
+      "batch": "P3",
+      "name": "An ordinary CTE is declared recursive",
+      "mutation": {
+        "file": "cte.go",
+        "anchor": "sourceclasses/P3-5/anchor.txt",
+        "replacement": "sourceclasses/P3-5/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The non-recursive path marks its item recursive. PostgreSQL accepts WITH",
+          "RECURSIVE over an item that does not refer to itself, so the statement",
+          "runs — but RECURSIVE is a property of the whole clause, and it changes",
+          "what every other item in it is permitted to do."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-5"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-5$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-5"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-5$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionSource_isAnOrdinaryCTEBody"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionSource_isAnOrdinaryCTEBody$"
+        ]
+      },
+      "note": [
+        "The precondition and the semantic probe are the same assertion here, and",
+        "deliberately so: what makes the mutation observable is exactly that an",
+        "ordinary CTE is not written as recursive, so the fixture check and the",
+        "narrow probe are one claim. The killer is a level up — the whole statement,",
+        "asserted as text, where the keyword and the added column list both show."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "cte.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSourceMutationPrecondition/P3-5"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionSource_isAnOrdinaryCTEBody"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P3-6",
+      "batch": "P3",
+      "name": "A compound nested in another compound loses its parentheses",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "sourceclasses/P3-6/anchor.txt",
+        "replacement": "sourceclasses/P3-6/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "A nested compound is written bare, so the inner operation's LIMIT and",
+          "OFFSET bind to the outer one and the branch grouping the caller wrote is",
+          "not the grouping PostgreSQL reads."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-6"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-6$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_nestedCompoundIsParenthesised"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_nestedCompoundIsParenthesised$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionSource_nestedCompoundIsASource"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionSource_nestedCompoundIsASource$"
+        ]
+      },
+      "note": [
+        "The rule is the compiler's and predates this phase; the class is here",
+        "because nesting a compound inside a source is where it becomes reachable",
+        "from the public API. The semantic probe is the compiler's own test and the",
+        "killer is the public one, which is the two levels the model asks for."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_nestedCompoundIsParenthesised"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionSource_nestedCompoundIsASource"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P3-7",
+      "batch": "P3",
+      "name": "Placeholder numbering restarts inside the compound",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "sourceclasses/P3-7/anchor.txt",
+        "replacement": "sourceclasses/P3-7/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "Each branch is written with its own parameter numbering and the values are",
+          "then concatenated in order. The statement is still valid SQL and still",
+          "binds the right number of arguments — it binds the first branch's values",
+          "into the second. This is the failure that cannot go wrong quietly anywhere",
+          "else, and it is the reason the compound shares the enclosing writer."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-7"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-7$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_placeholdersAreGlobal"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_placeholdersAreGlobal$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionSource_numbersEveryParameterAcrossOneStatement"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionSource_numbersEveryParameterAcrossOneStatement$"
+        ]
+      },
+      "note": [
+        "The mutation restarts the numbering rather than dropping arguments, so the",
+        "argument list is still the right length and in the right order. Only the",
+        "text says $1 twice, which is why the killer asserts the statement in full."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_placeholdersAreGlobal"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionSource_numbersEveryParameterAcrossOneStatement"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P3-8",
+      "batch": "P3",
+      "name": "The parameters collected before the compound are discarded",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "sourceclasses/P3-8/anchor.txt",
+        "replacement": "sourceclasses/P3-8/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "A compound nested in a larger statement throws away whatever the enclosing",
+          "query had already bound — its select list, its WITH items — so the outer",
+          "query's own parameters vanish from the argument list while its",
+          "placeholders stay in the text."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-8"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-8$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-8"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-8$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionSource_numbersEveryParameterAcrossOneStatement"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionSource_numbersEveryParameterAcrossOneStatement$"
+        ]
+      },
+      "note": [
+        "The compound alone cannot express this — a compound compiled on its own has",
+        "nothing collected before it — so both the fixture check and the probe are",
+        "the case where one is a source inside a query that binds a value first."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSourceMutationPrecondition/P3-8"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionSource_numbersEveryParameterAcrossOneStatement"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P3-9",
+      "batch": "P3",
+      "name": "A derived table is not named what the caller named it",
+      "mutation": {
+        "file": "subquery.go",
+        "anchor": "sourceclasses/P3-9/anchor.txt",
+        "replacement": "sourceclasses/P3-9/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The alias is applied at the source level, which is the level PostgreSQL",
+          "puts it at — after the parenthesised body, not inside it. This ignores the",
+          "caller's name, so two derived tables built from one query stop being",
+          "distinguishable and a column of either qualifies against the wrong one."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestSourceMutationPrecondition/P3-9"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSourceMutationPrecondition$/^P3-9$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSource_theAliasIsTheCallers"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestSource_theAliasIsTheCallers$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionSource_aliasesIndependently"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionSource_aliasesIndependently$"
+        ]
+      },
+      "note": [
+        "The killer builds two sources from one union and joins them, which is the",
+        "case a single constant alias cannot survive. It is not specific to set",
+        "operations — nothing about aliasing is — and it is here because a compound",
+        "source is the one whose alias sits outside a body that is not a SELECT."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "subquery.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSource_theAliasIsTheCallers"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionSource_aliasesIndependently"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    }
+  ]
+}

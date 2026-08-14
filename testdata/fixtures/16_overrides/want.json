@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 2,
+    "errors": 2,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E006",
+      "severity": "error",
+      "tier": "column",
+      "message": "FeeUntagged is Money but public.payments.fee_untagged is text",
+      "reason": "text maps to string",
+      "fix": "declare the field as string",
+      "entity": "domain.Payment",
+      "field": "FeeUntagged",
+      "go_type": "Money",
+      "table": "public.payments",
+      "column": "fee_untagged",
+      "pg_type": "text",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 30,
+        "column": 2
+      }
+    },
+    {
+      "code": "E006",
+      "severity": "error",
+      "tier": "column",
+      "message": "WrongBand is orm.Range[string] but public.payments.wrong_band is numrange",
+      "reason": "numrange maps to orm.Range[Decimal]",
+      "fix": "declare the field as orm.Range[Decimal]",
+      "entity": "domain.Payment",
+      "field": "WrongBand",
+      "go_type": "orm.Range[string]",
+      "table": "public.payments",
+      "column": "wrong_band",
+      "pg_type": "numrange",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 38,
+        "column": 2
+      }
+    }
+  ]
+}

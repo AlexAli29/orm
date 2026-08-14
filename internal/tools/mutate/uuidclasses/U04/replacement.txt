@@ -1,0 +1,3 @@
+	if pg := f.Tags.PGType; pg != "" && false {
+		return b.parseTypeRef(pg), nullable, nil
+	}

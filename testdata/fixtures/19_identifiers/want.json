@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E014",
+      "severity": "error",
+      "tier": "entity",
+      "message": "github.com/AlexAli29/orm/testdata/fixtures/19_identifiers/shipping.Address and github.com/AlexAli29/orm/testdata/fixtures/19_identifiers/billing.Address would generate the same identifiers",
+      "reason": "both are named Address and both generate into generated",
+      "fix": "give the two entities separate output directories, or rename one of them",
+      "entity": "shipping.Address",
+      "position": {
+        "file": "shipping/entities.go",
+        "line": 5,
+        "column": 1
+      }
+    }
+  ]
+}

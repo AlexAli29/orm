@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 2,
+    "errors": 2,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E018",
+      "severity": "error",
+      "tier": "column",
+      "message": "domain.Item.Alt and domain.Item.Label both map to public.items.label",
+      "reason": "two fields over one column disagree on every write, and reading fills both with the same value",
+      "fix": "point Alt at another column with orm:\"column:<name>\", or exclude it with orm:\"-\"",
+      "entity": "domain.Item",
+      "field": "Alt",
+      "go_type": "string",
+      "table": "public.items",
+      "column": "label",
+      "pg_type": "text",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 23,
+        "column": 2
+      }
+    },
+    {
+      "code": "E017",
+      "severity": "error",
+      "tier": "entity",
+      "message": "domain.User and domain.Account both map to public.users",
+      "reason": "one table has one identity, one set of writable columns and one set of relations; two entities over it would disagree about all three",
+      "fix": "map domain.User to its own table, or remove one of the two entities",
+      "entity": "domain.User",
+      "table": "public.users",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 5,
+        "column": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+	captured := slices.Clone(searchPath)
+	var major string
+	if err := conn.QueryRow(ctx,
+		`SELECT current_setting('server_version_num')`).Scan(&major); err != nil {
+		return nil, err
+	}
+	captured = append(captured, "pg"+major)
+	return model.NewSchemaWithViews(captured, tables, views), nil
+}

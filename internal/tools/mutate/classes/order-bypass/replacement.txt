@@ -1,0 +1,2 @@
+  AND i.indisunique AND i.indisvalid AND i.indisready
+ORDER BY ic.relname DESC, i.indexrelid`

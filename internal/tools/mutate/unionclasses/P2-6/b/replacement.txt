@@ -1,0 +1,3 @@
+	if false {
+		return fmt.Errorf("UNION ALL branch %d does not describe its result shape", rightBranch)
+	}

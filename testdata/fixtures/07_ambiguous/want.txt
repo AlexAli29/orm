@@ -1,0 +1,30 @@
+domain/entities.go:27:2: error: E009: domain.Post.Author is ambiguous: posts_author_fkey, posts_editor_fkey
+    Go:          domain.Post.Author
+    PostgreSQL:  public.posts
+    relation:    Author
+    reason:      2 foreign keys could back it: 2 on public.posts and 0 on public.users
+    fix:         pin the constraint with orm:"fk:posts_author_fkey"
+
+domain/entities.go:31:2: error: E008: domain.Post.Wrong names the constraint posts_reviewer_fkey, which does not relate public.posts and public.users
+    Go:          domain.Post.Wrong
+    PostgreSQL:  public.posts
+    relation:    Wrong
+    constraint:  posts_reviewer_fkey
+    reason:      the constraints that do relate them are posts_author_fkey, posts_editor_fkey
+    fix:         name one of the constraints listed above, or add the missing foreign key
+
+domain/entities.go:33:2: error: E008: domain.Post.Tag has no foreign key between public.posts and public.tags
+    Go:          domain.Post.Tag
+    PostgreSQL:  public.posts
+    relation:    Tag
+    reason:      a relation is a fact about the schema; without a foreign key there is nothing to derive it from
+    fix:         add a foreign key between public.posts and public.tags
+
+domain/entities.go:36:2: error: E008: domain.Post.Backwards asks for side:remote, but public.users has no foreign key to public.posts
+    Go:          domain.Post.Backwards
+    PostgreSQL:  public.posts
+    relation:    Backwards
+    reason:      the foreign key between them is posts_author_fkey, posts_editor_fkey, on public.posts, which side:remote excludes
+    fix:         drop the side: tag and let the catalog decide, or write side:local
+
+4 findings: 4 errors, 0 warnings

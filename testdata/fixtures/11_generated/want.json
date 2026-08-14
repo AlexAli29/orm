@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 5,
+    "errors": 2,
+    "warnings": 3
+  },
+  "findings": [
+    {
+      "code": "E002",
+      "severity": "error",
+      "tier": "column",
+      "message": "public.invoices.domain_note is NOT NULL with no default and is not mapped",
+      "reason": "domain.Invoice cannot supply a value for it, so no row can be inserted through this entity",
+      "fix": "map the column on domain.Invoice, give it a default, or make it nullable",
+      "entity": "domain.Invoice",
+      "table": "public.invoices",
+      "column": "domain_note",
+      "pg_type": "public.required_text",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "tier": "column",
+      "message": "public.invoices.required_note is NOT NULL with no default and is not mapped",
+      "reason": "domain.Invoice cannot supply a value for it, so no row can be inserted through this entity",
+      "fix": "map the column on domain.Invoice, give it a default, or make it nullable",
+      "entity": "domain.Invoice",
+      "table": "public.invoices",
+      "column": "required_note",
+      "pg_type": "text",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "code": "W003",
+      "severity": "warning",
+      "tier": "column",
+      "message": "column public.invoices.created_at is not mapped",
+      "reason": "the column has a default, so inserts succeed without it, but its value cannot be read back",
+      "fix": "add a field for created_at to domain.Invoice, or leave it unmapped on purpose and set strict.unmapped_columns: off",
+      "entity": "domain.Invoice",
+      "table": "public.invoices",
+      "column": "created_at",
+      "pg_type": "timestamptz",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "code": "W003",
+      "severity": "warning",
+      "tier": "column",
+      "message": "column public.invoices.optional_note is not mapped",
+      "reason": "the column is nullable, so inserts succeed without it, but its value cannot be read back",
+      "fix": "add a field for optional_note to domain.Invoice, or leave it unmapped on purpose and set strict.unmapped_columns: off",
+      "entity": "domain.Invoice",
+      "table": "public.invoices",
+      "column": "optional_note",
+      "pg_type": "text",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "code": "W003",
+      "severity": "warning",
+      "tier": "column",
+      "message": "column public.invoices.seq is not mapped",
+      "reason": "the column has a default, so inserts succeed without it, but its value cannot be read back",
+      "fix": "add a field for seq to domain.Invoice, or leave it unmapped on purpose and set strict.unmapped_columns: off",
+      "entity": "domain.Invoice",
+      "table": "public.invoices",
+      "column": "seq",
+      "pg_type": "int8",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 5,
+        "column": 1
+      }
+    }
+  ]
+}

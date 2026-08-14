@@ -1,0 +1,4 @@
+	stale := (*h.indexes)[idx]
+	*h.indexes = slices.Delete(*h.indexes, idx, idx+1)
+	*h.indexes = append(*h.indexes, stale)
+	return nil

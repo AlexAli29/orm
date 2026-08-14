@@ -1,0 +1,15 @@
+version: 1
+
+schema:
+  # The Go declarations own the schema, and migrations carry it to PostgreSQL.
+  mode: managed
+  dsn: ${JOURNAL_DSN}
+  search_path:
+    - public
+
+migrations:
+  dir: migrations
+
+packages:
+  - path: ./internal/domain
+    output: same

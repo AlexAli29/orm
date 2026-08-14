@@ -1,0 +1,14 @@
+version: 1
+
+schema:
+  dsn: ${ORM_FIXTURE_DSN}
+  search_path:
+    - public
+
+# Two packages generating into one directory. Their entities are both called
+# Address, so the generated identifiers would collide.
+packages:
+  - path: ./billing
+    output: ./generated
+  - path: ./shipping
+    output: ./generated

@@ -1,0 +1,3 @@
+		if int(keyAtts) < len(indkey) {
+			indkey = indkey[:keyAtts]
+		}

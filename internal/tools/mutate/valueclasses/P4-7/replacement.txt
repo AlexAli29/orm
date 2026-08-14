@@ -1,0 +1,9 @@
+		outer := w.args
+		w.args = nil
+		if err := c.writeBranch(w, b); err != nil {
+			if strings.HasPrefix(err.Error(), "branch ") {
+				return err
+			}
+			return fmt.Errorf("branch %d: %w", i+1, err)
+		}
+		w.args = append(outer, w.args...)

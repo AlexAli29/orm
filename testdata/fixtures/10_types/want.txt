@@ -1,0 +1,63 @@
+domain/entities.go:34:2: warning: W015: public.things.naive is timestamp without time zone
+    Go:          domain.Thing.Naive time.Time
+    PostgreSQL:  public.things.naive timestamp
+    reason:      the column stores a wall clock reading with no offset, so the instant it denotes depends on whoever reads it
+    fix:         change the column to timestamptz, or set strict.timestamp_without_tz: off if the ambiguity is intended
+
+domain/entities.go:37:2: error: E013: public.things.amount has no configured Go mapping for numeric
+    Go:          domain.Thing.Amount string
+    PostgreSQL:  public.things.amount numeric
+    reason:      there is no lossless built-in Go type for an arbitrary-precision decimal, and mapping it to float64 would silently corrupt money
+    fix:         add a types.numeric entry to orm.yaml:
+                 types:
+                   numeric:
+                     go: github.com/shopspring/decimal.Decimal
+                     codec: decimal
+
+domain/entities.go:38:2: error: E013: public.things.ref has no configured Go mapping for uuid
+    Go:          domain.Thing.Ref string
+    PostgreSQL:  public.things.ref uuid
+    reason:      Go has no uuid type, and the popular third-party ones are not interchangeable
+    fix:         add a types.uuid entry to orm.yaml:
+                 types:
+                   uuid:
+                     go: github.com/google/uuid.UUID
+                     codec: uuid
+
+domain/entities.go:40:2: error: E006: Span is string but public.things.span is interval
+    Go:          domain.Thing.Span string
+    PostgreSQL:  public.things.span interval
+    reason:      interval maps to orm.Interval
+    fix:         declare the field as orm.Interval
+
+domain/entities.go:43:2: error: E006: Quota is orm.Range[int64] but public.things.quota is int4range
+    Go:          domain.Thing.Quota orm.Range[int64]
+    PostgreSQL:  public.things.quota int4range
+    reason:      int4range maps to orm.Range[int32]
+    fix:         declare the field as orm.Range[int32]
+
+domain/entities.go:45:2: error: E012: public.things.price has the unsupported type numrange
+    Go:          domain.Thing.Price orm.Range[float64]
+    PostgreSQL:  public.things.price numrange
+    reason:      numrange ranges over numeric, and numeric has no configured Go mapping: there is no lossless built-in Go type for an arbitrary-precision decimal, and mapping it to float64 would silently corrupt money. Add a types.numeric entry to orm.yaml naming a Go type such as github.com/shopspring/decimal.Decimal
+    fix:         exclude the field with orm:"-", change the column's type, or configure a mapping for the element type under types in orm.yaml
+
+domain/entities.go:47:2: error: E006: Slots is orm.Multirange[int64] but public.things.slots is int4multirange
+    Go:          domain.Thing.Slots orm.Multirange[int64]
+    PostgreSQL:  public.things.slots int4multirange
+    reason:      int4multirange maps to orm.Multirange[int32]
+    fix:         declare the field as orm.Multirange[int32]
+
+domain/entities.go:51:2: error: E006: Window is Period but public.things.window_ is tstzrange
+    Go:          domain.Thing.Window Period
+    PostgreSQL:  public.things.window_ tstzrange
+    reason:      tstzrange maps to orm.Range[time.Time]
+    fix:         declare the field as orm.Range[time.Time]
+
+domain/entities.go:52:2: error: E012: public.things.grid is a 2-dimensional array
+    Go:          domain.Thing.Grid [][]int32
+    PostgreSQL:  public.things.grid int4[]
+    reason:      v1 maps one-dimensional arrays only; a Go slice of slices does not round-trip through PostgreSQL's nested array representation
+    fix:         store the value as a one-dimensional array, as jsonb, or exclude the field with orm:"-"
+
+9 findings: 8 errors, 1 warning

@@ -1,0 +1,10 @@
+	best := ""
+	for _, c := range candidates {
+		if !c.Unique || c.Partial || c.Columns == 0 {
+			continue
+		}
+		if best == "" || c.Name < best {
+			best = c.Name
+		}
+	}
+	return best

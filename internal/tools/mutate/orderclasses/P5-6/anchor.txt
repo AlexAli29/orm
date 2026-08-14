@@ -1,0 +1,10 @@
+	if c.Limit != nil {
+		w.b.WriteString(" LIMIT ")
+		w.b.WriteString(strconv.Itoa(*c.Limit))
+	}
+	if c.Offset != nil {
+		w.b.WriteString(" OFFSET ")
+		w.b.WriteString(strconv.Itoa(*c.Offset))
+	}
+	return nil
+}

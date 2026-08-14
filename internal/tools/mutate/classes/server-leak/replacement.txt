@@ -1,0 +1,7 @@
+	fmt.Fprintf(&b, "orm-mapping/%d\n", Version)
+	if m == nil {
+		return b.String()
+	}
+	if m.Schema != nil {
+		fmt.Fprintf(&b, "introspected-from %s\n", strings.Join(m.Schema.SearchPath, ","))
+	}

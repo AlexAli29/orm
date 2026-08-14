@@ -1,0 +1,4 @@
+	if em.Entity == nil || em.Entity.Kind != model.RelMaterializedView {
+		return
+	}
+	fmt.Fprintf(b, "  concurrent-refresh %s\n", em.ConcurrentRefreshIndex())

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E020",
+      "severity": "error",
+      "tier": "relation",
+      "message": "domain.Post.Draft targets Draft, which is not a mapped entity",
+      "reason": "github.com/AlexAli29/orm/testdata/fixtures/18_relation_targets/domain.Draft carries no //orm:table directive, or its own reconciliation failed, so there is no table to relate to",
+      "fix": "mark Draft with //orm:table, or remove the relation",
+      "entity": "domain.Post",
+      "field": "Draft",
+      "go_type": "orm.One[Draft]",
+      "relation": "Draft",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 26,
+        "column": 2
+      }
+    }
+  ]
+}

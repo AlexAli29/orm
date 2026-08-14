@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 3,
+    "errors": 3,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E021",
+      "severity": "error",
+      "tier": "tag",
+      "message": "invalid orm tag on domain.User.Unknown",
+      "reason": "unknown directive \"nope\"; the tag grammar is column:, fk:, side:, type:, pk, identity, unique, default:, generated:, pgtype: and -",
+      "fix": "the mapping directives are column:<name>, fk:<constraint>, side:local, side:remote, type:<key> and -; managed schema adds pk, identity, unique, default:<expr>, generated:<expr> and pgtype:<type>",
+      "entity": "domain.User",
+      "field": "Unknown",
+      "go_type": "nope:1",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 12,
+        "column": 2
+      }
+    },
+    {
+      "code": "E021",
+      "severity": "error",
+      "tier": "tag",
+      "message": "invalid orm tag on domain.User.FKOnScalar",
+      "reason": "fk: is only valid on an orm.One or orm.Many field",
+      "fix": "the mapping directives are column:<name>, fk:<constraint>, side:local, side:remote, type:<key> and -; managed schema adds pk, identity, unique, default:<expr>, generated:<expr> and pgtype:<type>",
+      "entity": "domain.User",
+      "field": "FKOnScalar",
+      "go_type": "fk:posts_author_id_fkey",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 14,
+        "column": 2
+      }
+    },
+    {
+      "code": "E021",
+      "severity": "error",
+      "tier": "tag",
+      "message": "invalid orm tag on domain.User.BadSide",
+      "reason": "side: invalid side \"sideways\", want local or remote",
+      "fix": "the mapping directives are column:<name>, fk:<constraint>, side:local, side:remote, type:<key> and -; managed schema adds pk, identity, unique, default:<expr>, generated:<expr> and pgtype:<type>",
+      "entity": "domain.User",
+      "field": "BadSide",
+      "go_type": "side:sideways",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 16,
+        "column": 2
+      }
+    }
+  ]
+}

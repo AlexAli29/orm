@@ -1,0 +1,31 @@
+domain/entities.go:40:1: warning: W003: column public.comments.author_id is not mapped
+    Go:          domain.Comment
+    PostgreSQL:  public.comments.author_id int8
+    reason:      this column carries the foreign key for domain.Comment.Author. Rows inserted through domain.Comment cannot set it, so the relationship is read-only from this entity
+    fix:         map it as a scalar field on domain.Comment if you need to write it
+
+domain/entities.go:31:1: error: E002: public.docs.owner_id is NOT NULL with no default and is not mapped
+    Go:          domain.Doc
+    PostgreSQL:  public.docs.owner_id int8
+    reason:      domain.Doc cannot supply a value for it, so no row can be inserted through this entity
+    fix:         map the column on domain.Doc, give it a default, or make it nullable
+
+domain/entities.go:50:1: error: E023: domain.Note has no field for the primary key column id of public.notes
+    Go:          domain.Note
+    PostgreSQL:  public.notes.id
+    reason:      an entity whose identity cannot be read back cannot be used with the write API: the generated key is discarded on insert, and update and delete have nothing to address
+    fix:         add a field for id to domain.Note
+
+domain/entities.go:50:1: warning: W003: column public.notes.id is not mapped
+    Go:          domain.Note
+    PostgreSQL:  public.notes.id int8
+    reason:      the column is an identity column, so PostgreSQL supplies it, but its value cannot be read back
+    fix:         add a field for id to domain.Note, or leave it unmapped on purpose and set strict.unmapped_columns: off
+
+domain/entities.go:22:1: warning: W003: column public.posts.author_id is not mapped
+    Go:          domain.Post
+    PostgreSQL:  public.posts.author_id int8
+    reason:      this column carries the foreign key for domain.Post.Author and domain.User.Posts. Rows inserted through domain.Post cannot set it, so the relationship is read-only from this entity
+    fix:         map it as a scalar field on domain.Post if you need to write it
+
+5 findings: 2 errors, 3 warnings

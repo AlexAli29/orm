@@ -1,0 +1,2 @@
+			if !strings.Contains(d, "index") ||
+				strings.Contains(d, "only in the second schema") {

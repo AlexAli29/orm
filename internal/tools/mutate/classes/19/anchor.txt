@@ -1,0 +1,12 @@
+	for i := range s.Tables {
+		if s.Tables[i].Schema == schemaName && s.Tables[i].Name == name {
+			t := &s.Tables[i]
+			return indexHolder{indexes: &t.Indexes, normalize: t.Normalize}, nil
+		}
+	}
+	for i := range s.MaterializedViews {
+		if s.MaterializedViews[i].Schema == schemaName && s.MaterializedViews[i].Name == name {
+			m := &s.MaterializedViews[i]
+			return indexHolder{indexes: &m.Indexes, normalize: func() {}}, nil
+		}
+	}

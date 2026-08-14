@@ -1,0 +1,9 @@
+	for _, h := range have.Indexes {
+		if !slices.ContainsFunc(want.Indexes, func(x schema.Index) bool { return x.Name == h.Name }) {
+			d.Operations = append(d.Operations,
+				DropIndex{Schema: have.Schema, Table: have.Name, Name: h.Name, Concurrently: h.Concurrently})
+		}
+	}
+}
+
+// refuseUnknownMatViewDependents stops a drop that would strand something.

@@ -1,0 +1,1 @@
+::error file=domain/entities.go,line=8,col=1,title=W003 PostgreSQL column exists but is unmapped::column public.events.note is not mapped%0A%0Athe column is nullable, so inserts succeed without it, but its value cannot be read back%0A%0AFix: add a field for note to domain.Event, or leave it unmapped on purpose and set strict.unmapped_columns: off

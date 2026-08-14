@@ -1,0 +1,1 @@
+		return Value[E, *V]{node: failed(fmt.Errorf("a scalar subquery reads one column and this one returns %d", arity))}

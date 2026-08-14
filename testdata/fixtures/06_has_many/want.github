@@ -1,0 +1,1 @@
+::error file=domain/entities.go,line=21,col=2,title=E019 many-cardinality relation has a local foreign key::domain.User.Orgs is orm.Many but the foreign key is on public.users%0A%0Apublic.users holds one org_id per row, so it can reference at most one domain.Org%0A%0AFix: declare the field as orm.One[Org], or move the foreign key to public.orgs

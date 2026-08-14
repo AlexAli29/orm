@@ -1,0 +1,6 @@
+shipping/entities.go:5:1: error: E014: github.com/AlexAli29/orm/testdata/fixtures/19_identifiers/shipping.Address and github.com/AlexAli29/orm/testdata/fixtures/19_identifiers/billing.Address would generate the same identifiers
+    Go:          shipping.Address
+    reason:      both are named Address and both generate into generated
+    fix:         give the two entities separate output directories, or rename one of them
+
+1 finding: 1 error, 0 warnings

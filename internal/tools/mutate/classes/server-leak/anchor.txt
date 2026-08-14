@@ -1,0 +1,4 @@
+	fmt.Fprintf(&b, "orm-mapping/%d\n", Version)
+	if m == nil {
+		return b.String()
+	}

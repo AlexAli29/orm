@@ -1,0 +1,14 @@
+version: 1
+
+schema:
+  dsn: ${ORM_FIXTURE_DSN}
+  search_path:
+    - public
+
+# Two packages, and a relation that crosses between them. The entities and the
+# schema agree; the relation is what cannot be generated.
+packages:
+  - path: ./catalog
+    output: same
+  - path: ./sales
+    output: same

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 2,
+    "errors": 2,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E010",
+      "severity": "error",
+      "tier": "relation",
+      "message": "domain.User.Session is orm.One but public.sessions(user_id) is not unique",
+      "reason": "nothing stops two rows from referencing the same one, so a to-one relation would silently pick whichever came back first",
+      "fix": "add a total unique constraint on public.sessions(user_id), or declare the field as orm.Many[Session]",
+      "entity": "domain.User",
+      "field": "Session",
+      "table": "public.sessions",
+      "column": "user_id",
+      "relation": "Session",
+      "constraint": "sessions_user_id_fkey",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 13,
+        "column": 2
+      }
+    },
+    {
+      "code": "E010",
+      "severity": "error",
+      "tier": "relation",
+      "message": "domain.User.Badge is orm.One but public.badges(user_id) is not unique",
+      "reason": "badges_one_active_per_user is a partial unique index, so it says nothing about the rows its WHERE clause excludes; a to-one relation would silently drop rows",
+      "fix": "add a total unique constraint on public.badges(user_id), or declare the field as orm.Many[Badge]",
+      "entity": "domain.User",
+      "field": "Badge",
+      "table": "public.badges",
+      "column": "user_id",
+      "relation": "Badge",
+      "constraint": "badges_user_id_fkey",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 14,
+        "column": 2
+      }
+    }
+  ]
+}

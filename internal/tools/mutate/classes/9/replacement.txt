@@ -1,0 +1,13 @@
+		out.Keys = append(out.Keys, indexcmp.Key{
+			Name:       c.Name,
+			Expression: normalizeExpr(c.Expression),
+			Direction:  int(c.Direction),
+			Nulls:      int(c.Nulls),
+			OpClass:    c.OpClass,
+		})
+	}
+	slices.SortFunc(out.Keys, func(p, q indexcmp.Key) int {
+		return strings.Compare(p.Name, q.Name)
+	})
+	return out
+}

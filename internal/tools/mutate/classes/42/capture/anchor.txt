@@ -1,0 +1,2 @@
+	return model.NewSchemaWithViews(slices.Clone(searchPath), tables, views), nil
+}

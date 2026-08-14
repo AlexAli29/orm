@@ -1,0 +1,1 @@
+		return len(s.With) > 0 || len(s.OrderBy) > 0 || s.Limit != nil || s.Offset != nil

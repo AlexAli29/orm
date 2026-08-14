@@ -1,0 +1,17 @@
+domain/entities.go:13:2: error: E010: domain.User.Session is orm.One but public.sessions(user_id) is not unique
+    Go:          domain.User.Session
+    PostgreSQL:  public.sessions.user_id
+    relation:    Session
+    constraint:  sessions_user_id_fkey
+    reason:      nothing stops two rows from referencing the same one, so a to-one relation would silently pick whichever came back first
+    fix:         add a total unique constraint on public.sessions(user_id), or declare the field as orm.Many[Session]
+
+domain/entities.go:14:2: error: E010: domain.User.Badge is orm.One but public.badges(user_id) is not unique
+    Go:          domain.User.Badge
+    PostgreSQL:  public.badges.user_id
+    relation:    Badge
+    constraint:  badges_user_id_fkey
+    reason:      badges_one_active_per_user is a partial unique index, so it says nothing about the rows its WHERE clause excludes; a to-one relation would silently drop rows
+    fix:         add a total unique constraint on public.badges(user_id), or declare the field as orm.Many[Badge]
+
+2 findings: 2 errors, 0 warnings

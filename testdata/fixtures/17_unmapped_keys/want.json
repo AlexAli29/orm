@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 5,
+    "errors": 2,
+    "warnings": 3
+  },
+  "findings": [
+    {
+      "code": "W003",
+      "severity": "warning",
+      "tier": "column",
+      "message": "column public.comments.author_id is not mapped",
+      "reason": "this column carries the foreign key for domain.Comment.Author. Rows inserted through domain.Comment cannot set it, so the relationship is read-only from this entity",
+      "fix": "map it as a scalar field on domain.Comment if you need to write it",
+      "entity": "domain.Comment",
+      "table": "public.comments",
+      "column": "author_id",
+      "pg_type": "int8",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 40,
+        "column": 1
+      }
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "tier": "column",
+      "message": "public.docs.owner_id is NOT NULL with no default and is not mapped",
+      "reason": "domain.Doc cannot supply a value for it, so no row can be inserted through this entity",
+      "fix": "map the column on domain.Doc, give it a default, or make it nullable",
+      "entity": "domain.Doc",
+      "table": "public.docs",
+      "column": "owner_id",
+      "pg_type": "int8",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 31,
+        "column": 1
+      }
+    },
+    {
+      "code": "E023",
+      "severity": "error",
+      "tier": "entity",
+      "message": "domain.Note has no field for the primary key column id of public.notes",
+      "reason": "an entity whose identity cannot be read back cannot be used with the write API: the generated key is discarded on insert, and update and delete have nothing to address",
+      "fix": "add a field for id to domain.Note",
+      "entity": "domain.Note",
+      "table": "public.notes",
+      "column": "id",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 50,
+        "column": 1
+      }
+    },
+    {
+      "code": "W003",
+      "severity": "warning",
+      "tier": "column",
+      "message": "column public.notes.id is not mapped",
+      "reason": "the column is an identity column, so PostgreSQL supplies it, but its value cannot be read back",
+      "fix": "add a field for id to domain.Note, or leave it unmapped on purpose and set strict.unmapped_columns: off",
+      "entity": "domain.Note",
+      "table": "public.notes",
+      "column": "id",
+      "pg_type": "int8",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 50,
+        "column": 1
+      }
+    },
+    {
+      "code": "W003",
+      "severity": "warning",
+      "tier": "column",
+      "message": "column public.posts.author_id is not mapped",
+      "reason": "this column carries the foreign key for domain.Post.Author and domain.User.Posts. Rows inserted through domain.Post cannot set it, so the relationship is read-only from this entity",
+      "fix": "map it as a scalar field on domain.Post if you need to write it",
+      "entity": "domain.Post",
+      "table": "public.posts",
+      "column": "author_id",
+      "pg_type": "int8",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 22,
+        "column": 1
+      }
+    }
+  ]
+}

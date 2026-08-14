@@ -1,0 +1,528 @@
+{
+  "comment": [
+    "The UNION ALL audit's findings.",
+    "",
+    "Four classes over three defects, all found by an adversarial pass that worked",
+    "from the invariants and asked PostgreSQL what it accepts, rather than from the",
+    "tests. None of them was caught by five phases of campaigns, because every",
+    "campaign attacks the rules that were written and these were rules that were not.",
+    "",
+    "A0 and A1 are the same rule at its two levels: refused where the branch is handed",
+    "over, and refused again by the writer as a floor. A2 and A3 are two defects that",
+    "concealed each other — a hoisted WITH made an undeclared reference resolve, so",
+    "the statement worked and neither showed.",
+    "",
+    "Every killer runs in the root module or in internal/expr and needs no database.",
+    "The server's own answers are in internal/gendemo/m16_unionorder_test.go."
+  ],
+  "evidence_commit": "ab3e1df",
+  "evidence_commit_note": [
+    "ab3e1df is the revision every UNION ALL class was last applied to and run at, in a",
+    "worktree checked out at exactly that commit, with the manifests read and written",
+    "outside it so the tree stayed clean between classes. It is kept reachable as",
+    "archive/m16-union-mutation-evidence.",
+    "",
+    "The five UNION ALL campaigns were rerun together at one revision after `mutate",
+    "anchors` found four anchors that later phases had silently invalidated by editing",
+    "the code they quote. An anchor that no longer matches makes its class look like a",
+    "survivor, so the campaigns were pinned to revisions where they no longer ran.",
+    "They run again, and three harness controls were active: anchors still quote their",
+    "code, every site names the function its anchor is inside, and each semantic probe",
+    "survives every mutation in another function."
+  ],
+  "classes": [
+    {
+      "id": "A0",
+      "batch": "A",
+      "name": "A branch carrying a locking clause is accepted when the branch is handed over",
+      "mutation": {
+        "file": "union.go",
+        "anchor": "auditclasses/A0/anchor.txt",
+        "replacement": "auditclasses/A0/replacement.txt",
+        "count": 1,
+        "function": "UnionAll",
+        "expresses": [
+          "The construction-time refusal stops firing, so a branch that locks the rows it",
+          "reads reaches the compound. PostgreSQL refuses a locking clause anywhere in a",
+          "set operation, parentheses included, so the statement can only ever fail — and",
+          "it fails at the server rather than where the branch was given."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestAuditMutationPrecondition/A0"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestAuditMutationPrecondition$/^A0$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestAudit_aLockedBranchIsRefusedWhenHandedOver"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestAudit_aLockedBranchIsRefusedWhenHandedOver$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionBranch_refusesALockingClause"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionBranch_refusesALockingClause$"
+        ]
+      },
+      "note": [
+        "The writer keeps the same check as a floor, so the mutant still fails to render",
+        "— with the writer's diagnostic and at the wrong moment. The killer asserts the",
+        "diagnostic, which is what distinguishes the authority from the floor.",
+        "",
+        "This class exists because the audit found the defect, not because the rule was",
+        "planned: needsParens listed the locking clauses among the things parentheses fix,",
+        "and PostgreSQL refuses them parenthesised.",
+        "",
+        "The probe asserts the mistake is recorded on the builder, not that the",
+        "statement fails to render. It was the second when the campaign first ran it,",
+        "and the writer's floor made it pass under the mutant.",
+        "",
+        "The killer asserts \"UNION ALL branch\" and not only the sentence. Both refusals",
+        "carry the same sentence, because they call the same function, and only the",
+        "wrapping says which one spoke: the builder names the operation and the writer",
+        "names the position. Without that the class survived, with the floor doing the",
+        "work the authority was supposed to be doing."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 4,
+        "killer_passed": 4,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "union.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestAudit_aLockedBranchIsRefusedWhenHandedOver"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionBranch_refusesALockingClause",
+          "TestUnionBranch_refusesALockingClause/a_composed_branch_with_FOR_UPDATE",
+          "TestUnionBranch_refusesALockingClause/a_locked_branch_in_second_position",
+          "TestUnionBranch_refusesALockingClause/an_entity_branch_with_FOR_UPDATE"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "A1",
+      "batch": "A",
+      "name": "The writer stops refusing a locked branch",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "auditclasses/A1/anchor.txt",
+        "replacement": "auditclasses/A1/replacement.txt",
+        "count": 1,
+        "function": "Compound.write",
+        "expresses": [
+          "The floor is removed: a compound assembled inside the package, bypassing the",
+          "builder, renders a locking clause the server will not take."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestAuditMutationPrecondition/A0"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestAuditMutationPrecondition$/^A0$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_refusals"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_refusals$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestCompound_refusals"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_refusals$"
+        ]
+      },
+      "note": [
+        "Probe and killer are the compiler's own refusal list, because a floor has no",
+        "level above it: the public route is A0's, and it is refused before this runs."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 7,
+        "killer_passed": 7,
+        "killer_skipped": 0,
+        "semantic_ran": 7,
+        "semantic_passed": 7,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_refusals",
+          "TestCompound_refusals/a_branch_locked_with_an_explicit_strength",
+          "TestCompound_refusals/a_branch_that_locks_the_rows_it_reads"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestCompound_refusals",
+          "TestCompound_refusals/a_branch_locked_with_an_explicit_strength",
+          "TestCompound_refusals/a_branch_that_locks_the_rows_it_reads"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "A2",
+      "batch": "A",
+      "name": "A branch's own WITH is written bare",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "auditclasses/A2/anchor.txt",
+        "replacement": "auditclasses/A2/replacement.txt",
+        "count": 1,
+        "function": "needsParens",
+        "expresses": [
+          "A branch carrying a WITH clause stops being parenthesised. In the first branch",
+          "PostgreSQL accepts the result and hoists the declaration to the whole compound,",
+          "so it is evaluated once for the operation and visible to every branch; in any",
+          "later branch it is a syntax error. The same omission fails loudly in one",
+          "position and silently in the other, which is why the silent one had stood."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestAuditMutationPrecondition/A2"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestAuditMutationPrecondition$/^A2$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_aBranchesWithClauseIsParenthesised"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_aBranchesWithClauseIsParenthesised$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionBranch_parenthesisesAWithClause"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionBranch_parenthesisesAWithClause$"
+        ]
+      },
+      "note": [
+        "The killer asserts all three positions, because the hoisting is only observable",
+        "in the first: the later ones stop compiling and would be caught by anything."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 4,
+        "killer_passed": 4,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_aBranchesWithClauseIsParenthesised"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionBranch_parenthesisesAWithClause",
+          "TestUnionBranch_parenthesisesAWithClause/in_a_later_branch",
+          "TestUnionBranch_parenthesisesAWithClause/in_both,_under_one_name",
+          "TestUnionBranch_parenthesisesAWithClause/in_the_first_branch"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "A3",
+      "batch": "A",
+      "name": "A named query can be selected from without being declared",
+      "mutation": {
+        "file": "internal/expr/compile.go",
+        "anchor": "auditclasses/A3/anchor.txt",
+        "replacement": "auditclasses/A3/replacement.txt",
+        "count": 1,
+        "function": "writer.source",
+        "expresses": [
+          "A reference to a named query nothing declared is written as a bare identifier,",
+          "so the statement names a relation that does not exist. It reads correctly and",
+          "fails at the server.",
+          "",
+          "This is the defect that let a branch borrow another branch's CTE: with the",
+          "declaration hoisted by A2's defect, the borrowed name resolved and the",
+          "statement worked, which is why neither showed up on its own."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestAuditMutationPrecondition/A3"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestAuditMutationPrecondition$/^A3$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUnionBranch_aNamedQueryHasToBeDeclaredWhereItIsUsed"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionBranch_aNamedQueryHasToBeDeclaredWhereItIsUsed$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionBranch_isNotAScopeSharingMechanism"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionBranch_isNotAScopeSharingMechanism$"
+        ]
+      },
+      "note": [
+        "The killer is the scope claim rather than the reference rule, because the claim",
+        "is what the compiler has asserted in a comment since the compound node was",
+        "written and what was false until both defects were fixed."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compile.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUnionBranch_aNamedQueryHasToBeDeclaredWhereItIsUsed"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionBranch_isNotAScopeSharingMechanism"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "A4",
+      "batch": "A",
+      "name": "The operation's own named queries do not reach the statement",
+      "mutation": {
+        "file": "union.go",
+        "anchor": "auditclasses/A4/anchor.txt",
+        "replacement": "auditclasses/A4/replacement.txt",
+        "count": 1,
+        "function": "UnionQuery.build",
+        "expresses": [
+          "The items declared on the operation are dropped on the way to the tree, so",
+          "the branches that read them select from a named query nothing declares.",
+          "",
+          "This is the capability that had to exist before a branch's WITH could be",
+          "parenthesised. Sharing a named query between branches used to work because",
+          "the declaration was hoisted out of the first branch; closing that without",
+          "opening this would have removed the only way to do it."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestAudit_theOperationsWithReachesTheStatement"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestAudit_theOperationsWithReachesTheStatement$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestAudit_theOperationsWithReachesTheStatement"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestAudit_theOperationsWithReachesTheStatement$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionBranch_theOperationCanDeclareItsOwnNamedQueries"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionBranch_theOperationCanDeclareItsOwnNamedQueries$"
+        ]
+      },
+      "note": [
+        "The probe and the precondition are one assertion: what makes the mutation",
+        "observable is exactly that the items reach the tree. The killer is a level up,",
+        "at the statement, where the declaration has to be in front of the operation and",
+        "written once rather than once per branch."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "union.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestAudit_theOperationsWithReachesTheStatement"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionBranch_theOperationCanDeclareItsOwnNamedQueries"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    }
+  ]
+}

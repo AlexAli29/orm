@@ -1,0 +1,14 @@
+	only := &Diff{}
+	diffMaterializedViewIndexes(have, m, only)
+	if len(only.Operations) > 0 {
+		bare := m.Clone()
+		bare.Indexes = nil
+		d.Operations = append(d.Operations,
+			DropMaterializedView{Schema: m.Schema, Name: m.Name},
+			CreateMaterializedView{View: bare})
+		for _, ix := range m.Indexes {
+			d.Operations = append(d.Operations, CreateIndex{Schema: m.Schema, Table: m.Name, Index: ix})
+		}
+	}
+	return nil
+}

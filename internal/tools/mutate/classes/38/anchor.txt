@@ -1,0 +1,3 @@
+		if best == "" || c.Name < best {
+			best = c.Name
+		}

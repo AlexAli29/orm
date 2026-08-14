@@ -1,0 +1,10 @@
+		before := len(w.args)
+		if err := c.writeBranch(w, b); err != nil {
+			if strings.HasPrefix(err.Error(), "branch ") {
+				return err
+			}
+			return fmt.Errorf("branch %d: %w", i+1, err)
+		}
+		if i > 0 {
+			w.args = w.args[:before]
+		}

@@ -1,0 +1,32 @@
+version: 1
+
+schema:
+  # The declarations own the schema, so this project exercises the managed
+  # half of the UUID contract as well as the database-first half.
+  mode: managed
+  dsn: ${UUIDCOMPAT_DSN}
+  search_path:
+    - public
+    # Migrations do not create schemas — that is a frozen boundary — so these
+    # two are made by the runner before it migrates.
+    - schema_a
+    - schema_b
+
+migrations:
+  dir: migrations
+
+packages:
+  - path: ./domain
+    output: same
+  - path: ./tenanta
+    output: same
+  - path: ./tenantb
+    output: same
+
+# uuid maps only through configuration: Go has no uuid type and the popular
+# third-party ones are not interchangeable, so the ORM refuses to guess. This
+# is the mapping the CLI's own init template ships.
+types:
+  uuid:
+    go: github.com/google/uuid.UUID
+    codec: uuid

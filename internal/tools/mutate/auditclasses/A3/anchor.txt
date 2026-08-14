@@ -1,0 +1,1 @@
+		if !w.declaresCTE(s.cTEName) {

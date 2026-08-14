@@ -1,0 +1,19 @@
+domain/entities.go:12:2: error: E004: nullable column public.users.nickname cannot be represented by string
+    Go:          domain.User.Nickname string
+    PostgreSQL:  public.users.nickname text
+    reason:      string has no value that means SQL NULL
+    fix:         use *string, or sql.Null[string]
+
+domain/entities.go:17:2: error: E004: nullable column public.users.tags cannot be represented by []string
+    Go:          domain.User.Tags []string
+    PostgreSQL:  public.users.tags text[]
+    reason:      a slice cannot distinguish SQL NULL from an empty array: both arrive as a nil or empty slice
+    fix:         use *[]string
+
+domain/entities.go:25:2: warning: W005: Email is a pointer but public.users.email is NOT NULL
+    Go:          domain.User.Email *string
+    PostgreSQL:  public.users.email text
+    reason:      the column can never be NULL, so the pointer adds a nil case that the database cannot produce
+    fix:         drop the pointer: string
+
+3 findings: 2 errors, 1 warning

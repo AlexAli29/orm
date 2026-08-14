@@ -1,0 +1,13 @@
+# The orm binary, when built into the working tree.
+/orm
+
+# The internal tools, when built into the working tree rather than go run.
+/apimanifest
+/godoclint
+
+# Go build and test artefacts.
+*.test
+*.out
+
+# The mutation harness is built on demand; a committed binary is not evidence.
+/mutate

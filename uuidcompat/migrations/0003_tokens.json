@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "id": "0003_tokens",
+  "dependsOn": [
+    "0002_schema_a_users_schema_b_users"
+  ],
+  "atomic": true,
+  "operations": [
+    {
+      "op": "create_table",
+      "args": {
+        "Table": {
+          "Schema": "public",
+          "Name": "tokens",
+          "Columns": [
+            {
+              "Name": "id",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "tenant_id",
+              "Type": {
+                "Schema": "public",
+                "Name": "tenant_uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            },
+            {
+              "Name": "value",
+              "Type": {
+                "Schema": "",
+                "Name": "uuid",
+                "Array": false
+              },
+              "Nullable": false,
+              "Default": "gen_random_uuid()",
+              "Identity": 0,
+              "Generated": "",
+              "Collation": ""
+            }
+          ],
+          "PrimaryKey": {
+            "Name": "tokens_pkey",
+            "Columns": [
+              "id"
+            ]
+          },
+          "Uniques": [],
+          "ForeignKeys": [],
+          "Checks": null,
+          "Indexes": []
+        }
+      }
+    }
+  ]
+}

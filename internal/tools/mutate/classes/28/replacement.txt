@@ -1,0 +1,10 @@
+	if em.Entity == nil || em.Table == nil {
+		return
+	}
+	if em.Entity.Kind != model.RelMaterializedView {
+		for _, u := range em.Table.Uniques {
+			fmt.Fprintf(b, "  table-index %s\n", u.Name)
+		}
+		return
+	}
+	fmt.Fprintf(b, "  concurrent-refresh %s\n", em.ConcurrentRefreshIndex())

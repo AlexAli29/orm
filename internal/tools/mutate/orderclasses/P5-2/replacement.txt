@@ -1,0 +1,4 @@
+	if len(q.shape.slots) > 0 {
+		return q.shape.slots[0].alias == name
+	}
+	return false

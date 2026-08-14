@@ -1,0 +1,954 @@
+{
+  "comment": [
+    "The UUID qualification's mutation classes.",
+    "",
+    "Separate from the M16.5 manifest on purpose. That one is 47 classes about",
+    "materialized views and migrations and its accounting is closed; mixing these",
+    "in would reopen it and make both harder to read. These classes mutate generic",
+    "production rules \u2014 the configured-mapping lookup, the capability table, the",
+    "eligibility rule, the nullability check \u2014 because that is where uuid actually",
+    "lives. Nothing here is a uuid-specific branch invented so that there would be",
+    "something to mutate.",
+    "",
+    "Killers run in the nested module, so they need UUIDCOMPAT_DSN and a database",
+    "the qualification has migrated."
+  ],
+  "evidence_commit": "a196e03",
+  "evidence_commit_note": [
+    "a196e03 is the revision the mutants were applied to and the killers run at, in",
+    "an isolated worktree checked out at exactly that commit. Recording the result",
+    "necessarily produces a later commit, because this file is in the repository;",
+    "that commit differs from a196e03 by this file alone."
+  ],
+  "classes": [
+    {
+      "id": "U01",
+      "batch": "U",
+      "name": "The configured mapping stops being found by the column's own type name",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/reconcile/types.go",
+        "anchor": "uuidclasses/U01/anchor.txt",
+        "replacement": "uuidclasses/U01/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "A column's PostgreSQL type name is no longer one of the keys the configured",
+          "mapping is looked up under, so uuid resolves through nothing and a project",
+          "whose only statement about the type is types.uuid loses it entirely."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUUIDMutationPrecondition/U01"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUIDMutationPrecondition$/^U01$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUUID_databaseFirstNeedsNoTag"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_databaseFirstNeedsNoTag$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUUID_managedWithPgtypeWorks"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_managedWithPgtypeWorks$"
+        ]
+      },
+      "note": [
+        "Database-first is the semantic level because it has nothing but the mapping",
+        "to go on. The killer is the managed workflow end to end, which also has",
+        "nothing else: pgtype: names the PostgreSQL type, and the Go type still comes",
+        "from the mapping."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/reconcile/types.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUUID_databaseFirstNeedsNoTag"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUUID_managedWithPgtypeWorks"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "U02",
+      "batch": "U",
+      "name": "uuid loses its ordered capability",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/emit/capability.go",
+        "anchor": "uuidclasses/U02/anchor.txt",
+        "replacement": "uuidclasses/U02/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "uuid drops from capOrd to capBase, so the generated descriptor is Col rather",
+          "than OrdCol and a uuid column offers equality but no ordering. PostgreSQL",
+          "orders uuid, so the ORM refusing to is a claim about the type that is false."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUUIDMutationPrecondition/U02"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUIDMutationPrecondition$/^U02$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUUID_generatedDescriptorShapes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_generatedDescriptorShapes$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUUID_generatedDescriptorShapes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_generatedDescriptorShapes$"
+        ]
+      },
+      "note": [
+        "The killer reads generated text rather than running generated code on",
+        "purpose. This mutation makes the module fail to compile, and a package that",
+        "does not compile says nothing about which decision was wrong."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 9,
+        "killer_passed": 9,
+        "killer_skipped": 0,
+        "semantic_ran": 9,
+        "semantic_passed": 9,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/emit/capability.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUUID_generatedDescriptorShapes",
+          "TestUUID_generatedDescriptorShapes/domain",
+          "TestUUID_generatedDescriptorShapes/foreign_key",
+          "TestUUID_generatedDescriptorShapes/materialized_view",
+          "TestUUID_generatedDescriptorShapes/nullable",
+          "TestUUID_generatedDescriptorShapes/ordered",
+          "TestUUID_generatedDescriptorShapes/view"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUUID_generatedDescriptorShapes",
+          "TestUUID_generatedDescriptorShapes/domain",
+          "TestUUID_generatedDescriptorShapes/foreign_key",
+          "TestUUID_generatedDescriptorShapes/materialized_view",
+          "TestUUID_generatedDescriptorShapes/nullable",
+          "TestUUID_generatedDescriptorShapes/ordered",
+          "TestUUID_generatedDescriptorShapes/view"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "U03",
+      "batch": "U",
+      "name": "A nullable uuid emits the non-nullable descriptor",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/emit/capability.go",
+        "anchor": "uuidclasses/U03/anchor.txt",
+        "replacement": "uuidclasses/U03/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "A nullable ordered column emits OrdCol instead of NullOrdCol, so a uuid that",
+          "can be SQL NULL is described as one that cannot \u2014 and uuid.UUID has no way",
+          "to hold the absence, so the zero UUID would stand in for it."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUUIDMutationPrecondition/U03"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUIDMutationPrecondition$/^U03$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUUID_generatedDescriptorShapes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_generatedDescriptorShapes$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUUID_generatedDescriptorShapes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_generatedDescriptorShapes$"
+        ]
+      },
+      "note": [
+        "The zero UUID is why this matters more for uuid than for int64: uuid.Nil is",
+        "a legitimate value, so a collapsed representation is invisible in the data."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 9,
+        "killer_passed": 9,
+        "killer_skipped": 0,
+        "semantic_ran": 9,
+        "semantic_passed": 9,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/emit/capability.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUUID_generatedDescriptorShapes",
+          "TestUUID_generatedDescriptorShapes/derived_bigint",
+          "TestUUID_generatedDescriptorShapes/materialized_view",
+          "TestUUID_generatedDescriptorShapes/nullable",
+          "TestUUID_generatedDescriptorShapes/view"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUUID_generatedDescriptorShapes",
+          "TestUUID_generatedDescriptorShapes/derived_bigint",
+          "TestUUID_generatedDescriptorShapes/materialized_view",
+          "TestUUID_generatedDescriptorShapes/nullable",
+          "TestUUID_generatedDescriptorShapes/view"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "U04",
+      "batch": "U",
+      "name": "The pgtype tag is ignored in managed mode",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/desired/types.go",
+        "anchor": "uuidclasses/U04/anchor.txt",
+        "replacement": "uuidclasses/U04/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The declared PostgreSQL type stops outranking anything derived from the Go",
+          "type, so pgtype:uuid says nothing and managed generation falls through to",
+          "whatever it can infer from uuid.UUID \u2014 which is nothing."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUUIDMutationPrecondition/U04"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUIDMutationPrecondition$/^U04$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUUID_generatedDescriptorShapes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_generatedDescriptorShapes$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUUID_managedWithPgtypeWorks"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_managedWithPgtypeWorks$"
+        ]
+      },
+      "note": [
+        "The semantic probe is the descriptor for the domain-typed column, because",
+        "that is the one the tag alone can produce. Refusing an untagged field is",
+        "not usable here: under this mutant every field is refused, so a test that",
+        "expects a refusal passes with the mutation and without it."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 9,
+        "semantic_passed": 9,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/desired/types.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUUID_generatedDescriptorShapes"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUUID_managedWithPgtypeWorks"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "U05",
+      "batch": "U",
+      "name": "A domain no longer resolves to the type it is built on",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/reconcile/types.go",
+        "anchor": "uuidclasses/U05/anchor.txt",
+        "replacement": "uuidclasses/U05/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The configured mapping stops being looked up under the type a domain",
+          "resolves to, so a column typed tenant_uuid finds no mapping even though",
+          "tenant_uuid is a uuid and types.uuid is configured."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUUIDMutationPrecondition/U05"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUIDMutationPrecondition$/^U05$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUUID_generatedDescriptorShapes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_generatedDescriptorShapes$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUUID_typeChangeIsCaughtByCheckGenerated"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_typeChangeIsCaughtByCheckGenerated$"
+        ]
+      },
+      "note": [
+        "The killer has to stage a project and run the generator. The tests that",
+        "read a domain column out of the live database use committed generated",
+        "code and would pass with any generator at all."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 9,
+        "semantic_passed": 9,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/reconcile/types.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUUID_generatedDescriptorShapes"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUUID_typeChangeIsCaughtByCheckGenerated"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "U06",
+      "batch": "U",
+      "name": "A single-column unique index stops qualifying for a concurrent refresh",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/eligible/eligible.go",
+        "anchor": "uuidclasses/U06/anchor.txt",
+        "replacement": "uuidclasses/U06/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "Eligibility demands more than one column, so the unique index over a single",
+          "uuid key no longer qualifies. The generated descriptor then refuses every",
+          "concurrent refresh, locally and permanently, and the refusal looks exactly",
+          "like correct caution."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUUIDMutationPrecondition/U06"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUIDMutationPrecondition$/^U06$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUUID_generatedRefreshDescriptor"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_generatedRefreshDescriptor$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUUID_staleNegativeConcurrentRefreshEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_staleNegativeConcurrentRefreshEligibility$"
+        ]
+      },
+      "note": [
+        "Same reason as U05: a refresh against the qualification database runs",
+        "committed generated code, so only a staged lifecycle that regenerates",
+        "can notice an eligibility rule that changed."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/eligible/eligible.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUUID_generatedRefreshDescriptor"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUUID_staleNegativeConcurrentRefreshEligibility"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "U07",
+      "batch": "U",
+      "name": "The chosen refresh index leaves the fingerprint",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/lock/lock.go",
+        "anchor": "uuidclasses/U07/anchor.txt",
+        "replacement": "uuidclasses/U07/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The concurrent-refresh line stops naming the index it chose, so two schemas",
+          "differing only in which index a refresh may use fingerprint the same and",
+          "check --generated calls stale generated code current."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUUIDMutationPrecondition/U07"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUIDMutationPrecondition$/^U07$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUUID_eligibilityChangeMovesTheLock"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_eligibilityChangeMovesTheLock$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUUID_staleNegativeConcurrentRefreshEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_staleNegativeConcurrentRefreshEligibility$"
+        ]
+      },
+      "note": [
+        "The stale-negative lifecycle is the only place this is observable: it is the",
+        "case where the eligibility answer changes and nothing else does."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/lock/lock.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUUID_eligibilityChangeMovesTheLock"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUUID_staleNegativeConcurrentRefreshEligibility"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "U08",
+      "batch": "U",
+      "name": "The local refusal for a missing refresh index is dropped",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "view.go",
+        "anchor": "uuidclasses/U08/anchor.txt",
+        "replacement": "uuidclasses/U08/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "Refresh stops checking whether the descriptor names a qualifying index, so a",
+          "generated descriptor that knows there is none asks PostgreSQL anyway. What",
+          "was a local refusal sending nothing becomes a round trip and a server error."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUUIDMutationPrecondition/U08"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUIDMutationPrecondition$/^U08$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUUID_refreshRefusesLocallyWithNoQualifyingIndex"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_refreshRefusesLocallyWithNoQualifyingIndex$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUUID_staleNegativeConcurrentRefreshEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_staleNegativeConcurrentRefreshEligibility$"
+        ]
+      },
+      "note": [
+        "Counting statements is what catches this. Both the mutated and the correct",
+        "code produce an error; only one of them produced it without asking."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "view.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUUID_refreshRefusesLocallyWithNoQualifyingIndex"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUUID_staleNegativeConcurrentRefreshEligibility"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "U09",
+      "batch": "U",
+      "name": "Source-induced nullability stops being validated",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/expr/nullable.go",
+        "anchor": "uuidclasses/U09/anchor.txt",
+        "replacement": "uuidclasses/U09/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The select-list check returns before examining anything, so a NOT NULL uuid",
+          "read through an outer join into a destination that cannot hold NULL is",
+          "accepted. It then fails as a scan error on whichever row happens to be",
+          "unmatched, or does not fail at all when every row matches."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestUUIDMutationPrecondition/U09"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUIDMutationPrecondition$/^U09$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestUUID_outerJoinNullabilityDominatesTheColumnConstraint"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_outerJoinNullabilityDominatesTheColumnConstraint$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUUID_leftJoinSourceInducedNullability",
+          "TestUUID_outerJoinNullabilityDominatesTheColumnConstraint"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-C",
+          "uuidcompat",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUUID_(leftJoinSourceInducedNullability|outerJoinNullabilityDominatesTheColumnConstraint)$"
+        ]
+      },
+      "note": [
+        "A fixture whose every row matched would not notice, which is why the fixture",
+        "carries an unmatched row and a zero-UUID row at once."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/nullable.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestUUID_outerJoinNullabilityDominatesTheColumnConstraint"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUUID_outerJoinNullabilityDominatesTheColumnConstraint"
+        ],
+        "restore_clean": true
+      }
+    }
+  ],
+  "not_expressible": [
+    {
+      "id": "U10",
+      "intent": "A uuid array degrades to its element type",
+      "finding": [
+        "There is no rule to mutate. The Go type of an array column is the one the",
+        "author declared \u2014 []uuid.UUID \u2014 and reconciliation checks it rather than",
+        "emitting it, so nothing in the generator can turn it into its element type.",
+        "The function that looked like the place, goDescFor, renders the description a",
+        "diagnostic prints; removing its slice prefix changes an error message and",
+        "nothing else, which the probe confirmed by passing unchanged.",
+        "",
+        "What defends the property is the shape check, and catching a mutation of that",
+        "needs a declaration this fixture does not contain: a scalar written where an",
+        "array belongs. That is a negative fixture rather than this class."
+      ]
+    },
+    {
+      "id": "U11",
+      "intent": "The column's PostgreSQL type leaves the mapping fingerprint",
+      "finding": [
+        "Removing the type from writeColumn is not enough to lose it. A column moved",
+        "from a domain over uuid to plain uuid \u2014 a schema change with no Go change at",
+        "all \u2014 still moves the lock under the mutant, so the fingerprint records the",
+        "PostgreSQL type in more than one place.",
+        "",
+        "That is a property worth having rather than a gap: the fingerprint does not",
+        "depend on a single line to notice a type. It does mean the class as stated",
+        "cannot be expressed by a one-line mutation, and it is recorded here rather",
+        "than left in the manifest as an entry that never runs. The probes written for",
+        "it stay in the suite \u2014 they are the only tests that isolate a PostgreSQL-type",
+        "change from a Go-type change."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+	return c, q.shape.columns(), nil

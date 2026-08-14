@@ -1,0 +1,7 @@
+		out.Keys = append(out.Keys, indexcmp.Key{
+			Name:       c.Name,
+			Expression: normalizeExpr(c.Expression),
+			Direction:  int(c.Direction),
+			Nulls:      int(c.Nulls),
+			OpClass:    c.OpClass,
+		})

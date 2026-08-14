@@ -1,0 +1,1 @@
+	return branchTerm[R]{sub: c, shape: q.shape, newScan: q.newScan, ex: q.ex}, nil

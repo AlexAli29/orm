@@ -1,0 +1,2 @@
+	case f.Mapping == fingerprint:
+		return Current

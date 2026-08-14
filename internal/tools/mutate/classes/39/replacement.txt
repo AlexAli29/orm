@@ -1,0 +1,6 @@
+	for _, c := range candidates {
+		if c.Qualifies() {
+			return c.Name
+		}
+	}
+	return ""

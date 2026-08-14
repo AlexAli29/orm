@@ -1,0 +1,2 @@
+	*h.indexes = append(*h.indexes, idx, idx)
+	h.normalize()

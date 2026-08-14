@@ -1,0 +1,10 @@
+version: 1
+
+schema:
+  dsn: ${ORM_GENDEMO_DSN}
+  search_path:
+    - public
+
+packages:
+  - path: .
+    output: same

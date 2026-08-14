@@ -1,0 +1,9 @@
+	ctx, sp := m.repo.startSpan(ctx, observe.OpRefresh, stmt, nil)
+	_, err = m.repo.execWriteRows(ctx, stmt, nil, "refreshing "+name)
+	sp.end(err, 0, err == nil)
+	if err != nil && cfg.concurrently {
+		return fmt.Errorf("orm: Refresh %s: CONCURRENTLY needs a unique index over plain "+
+			"columns covering every row, and this materialized view has none. Add one, "+
+			"or refresh without Concurrently", name)
+	}
+	return err

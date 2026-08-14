@@ -1,0 +1,4 @@
+	ctx, sp := m.repo.startSpan(ctx, observe.OpRefresh, stmt, nil)
+	_, err = m.repo.execWriteRows(ctx, stmt, nil, "refreshing "+name)
+	sp.end(err, 0, err == nil)
+	return err

@@ -1,0 +1,1 @@
+	q := &ComposedQuery[R]{ex: ex, items: slices.Clone(p.items), newScan: p.newScan, shape: p.shape}

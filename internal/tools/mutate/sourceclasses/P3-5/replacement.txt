@@ -1,0 +1,2 @@
+	out := expr.NewCTE(name, sub, outs)
+	expr.SetRecursive(out)

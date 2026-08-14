@@ -1,0 +1,3 @@
+		if err := ValidateBranch(b); err != nil && false {
+			return fmt.Errorf("branch %d: %w", i+1, err)
+		}

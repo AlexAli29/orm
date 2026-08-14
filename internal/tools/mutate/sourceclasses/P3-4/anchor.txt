@@ -1,0 +1,4 @@
+	return sel, q.outputs(), nil
+}
+
+// valueTerm makes a composed query usable where a value is expected.

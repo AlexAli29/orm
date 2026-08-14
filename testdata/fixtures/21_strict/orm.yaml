@@ -1,0 +1,17 @@
+version: 1
+
+schema:
+  dsn: ${ORM_FIXTURE_DSN}
+  search_path:
+    - public
+
+packages:
+  - path: ./domain
+    output: same
+
+# The same entities and schema as 20_warnings_only, read under the opposite
+# policy: an unmapped column is a hard error here, and a naive timestamp is a
+# deliberate choice this project does not want to hear about again.
+strict:
+  unmapped_columns: error
+  timestamp_without_tz: off

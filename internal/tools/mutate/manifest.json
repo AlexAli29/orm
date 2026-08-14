@@ -1,0 +1,4466 @@
+{
+  "comment": [
+    "The authoritative list of E/F mutation correctness classes.",
+    "Totals are derived from this file, never from prose. A class is terminal",
+    "only when result is CAUGHT or TRUE_NO_OP and every dimension below holds:",
+    "source_precondition, source_changed, semantic_expression,",
+    "fixture_precondition, killer_smoke, killer_reachability, restore_clean.",
+    "Combined-bypass mutations carry a C suffix so they are never counted as",
+    "ordinary numbered classes.",
+    "",
+    "Each class declares, so that no future reviewer needs the conversation that",
+    "produced it: the file and anchor the mutation applies to, the permanent test",
+    "that asserts the fixture contains the attacked structure, the narrow probe",
+    "that shows the mutant expresses the intended defect, and the killer's argv",
+    "and expected tests. The harness fills in the evidence block from the runs.",
+    "",
+    "Killers are argv vectors, never shell strings: the concatenation that",
+    "produced #13's killer-execution failure is only possible when a command is",
+    "a string somebody assembles."
+  ],
+  "evidence_commit": "5fdd47e",
+  "classes": [
+    {
+      "id": "1",
+      "batch": "D1",
+      "name": "CreateMaterializedView keeps embedded indexes",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestChain_replayThroughTheArtifact"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestChain_replayThroughTheArtifact$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/migrate/ops_matview.go",
+        "anchor": "classes/1/anchor.txt",
+        "replacement": "classes/1/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "CreateMaterializedView keeps the indexes its payload carried, so replaying a",
+          "migration adds each index twice: once from the relation operation and once",
+          "from the CreateIndex beside it."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c1"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c1$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestReplay_theRelationOperationContributesNoIndexes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestReplay_theRelationOperationContributesNoIndexes$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/migrate/ops_matview.go"
+        ],
+        "source_changed": true,
+        "restore_clean": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestReplay_theRelationOperationContributesNoIndexes"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestChain_replayThroughTheArtifact"
+        ]
+      },
+      "note": [
+        "The planner strips a relation operation's indexes before writing an",
+        "artifact, so no end-to-end fixture can reach this class. What it defends",
+        "against is an artifact the planner did not write \u2014 committed before that",
+        "was fixed, or edited by hand \u2014 which makes replay through the artifact",
+        "the only level at which the property is observable, and the killer."
+      ]
+    },
+    {
+      "id": "2",
+      "batch": "D1",
+      "name": "CreateIndex duplicates state entry",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/migrate/ops_constraint.go",
+        "anchor": "classes/2/anchor.txt",
+        "replacement": "classes/2/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "CreateIndex.Apply appends the index to the relation's state twice, so one",
+          "CREATE INDEX in a migration leaves two logical entries behind. The",
+          "database only ever sees one statement, so no catalog assertion finds it;",
+          "what breaks is the next plan."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c2"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c2$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestChain_replayThroughTheArtifact"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestChain_replayThroughTheArtifact$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewConvergence_indexChangeSettles"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewConvergence_indexChangeSettles$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestChain_replayThroughTheArtifact"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewConvergence_indexChangeSettles"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/migrate/ops_constraint.go"
+        ]
+      }
+    },
+    {
+      "id": "3",
+      "batch": "D1",
+      "name": "DropIndex leaves stale duplicate",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/migrate/ops_constraint.go",
+        "anchor": "classes/3/anchor.txt",
+        "replacement": "classes/3/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "DropIndex.Apply removes the entry and appends it again, so the index",
+          "survives its own drop in replay state while PostgreSQL really loses it.",
+          "The state and the database then disagree in the direction no catalog",
+          "assertion looks at."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c3"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c3$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestReplay_indexesOnAMaterializedView",
+          "TestChain_replayThroughTheArtifact"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestReplay_indexesOnAMaterializedView$|^TestChain_replayThroughTheArtifact$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewConvergence_indexChangeSettles"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewConvergence_indexChangeSettles$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestChain_replayThroughTheArtifact",
+          "TestReplay_indexesOnAMaterializedView"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewConvergence_indexChangeSettles"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/migrate/ops_constraint.go"
+        ]
+      }
+    },
+    {
+      "id": "4",
+      "batch": "D1",
+      "name": "duplicate state falsely converges",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/migrate/planmatview.go",
+        "anchor": "classes/4/anchor.txt",
+        "replacement": "classes/4/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The matview index planner loses the branch that drops an index the",
+          "declarations do not have, so any extra state entry \u2014 a duplicate among",
+          "them \u2014 is treated as agreement and every plan comes out empty."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c4"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c4$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestMatViewIndexPlan_eachDifferenceHasItsOwnOutcome/only_in_the_state"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestMatViewIndexPlan_eachDifferenceHasItsOwnOutcome$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewConvergence_indexChangeSettles"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewConvergence_indexChangeSettles$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 5,
+        "semantic_passed": 5,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestMatViewIndexPlan_eachDifferenceHasItsOwnOutcome/only_in_the_state"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewConvergence_indexChangeSettles"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/migrate/planmatview.go"
+        ]
+      }
+    },
+    {
+      "id": "5",
+      "batch": "D1",
+      "name": "CreateIndex loses MatView support",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewIndex_lifecycleKeepsTheRelationAndTracksEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewIndex_lifecycleKeepsTheRelationAndTracksEligibility$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/migrate/ops_constraint.go",
+        "anchor": "classes/5/anchor.txt",
+        "replacement": "classes/5/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "CreateIndex.Apply resolves tables only, so an index on a materialized view",
+          "cannot be placed when the migration that creates it is replayed."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c5"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c5$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestReplay_indexesOnAMaterializedView"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestReplay_indexesOnAMaterializedView$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/migrate/ops_constraint.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestReplay_indexesOnAMaterializedView"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewIndex_lifecycleKeepsTheRelationAndTracksEligibility"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "6",
+      "batch": "D1",
+      "name": "DropIndex loses MatView support",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/migrate/ops_constraint.go",
+        "anchor": "classes/6/anchor.txt",
+        "replacement": "classes/6/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "DropIndex.Apply resolves tables only, so an index on a materialized view",
+          "cannot be found when the migration that drops it is replayed. CreateIndex",
+          "still resolves both, which is what makes this the DropIndex class."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c6"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c6$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestReplay_indexesOnAMaterializedView"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestReplay_indexesOnAMaterializedView$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewIndex_lifecycleKeepsTheRelationAndTracksEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewIndex_lifecycleKeepsTheRelationAndTracksEligibility$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestReplay_indexesOnAMaterializedView"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewIndex_lifecycleKeepsTheRelationAndTracksEligibility"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/migrate/ops_constraint.go"
+        ]
+      }
+    },
+    {
+      "id": "7",
+      "batch": "D1",
+      "name": "index-only change recreates MatView",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSurface_pg14AcceptsTheWholeIndexSurface"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestSurface_pg14AcceptsTheWholeIndexSurface$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/migrate/planmatview.go",
+        "anchor": "classes/7/anchor.txt",
+        "replacement": "classes/7/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "An index-only change drops and recreates the materialized view instead of",
+          "planning the index operations, discarding every stored row to add an index."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c4"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c4$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestMatViewIndex_lifecycleKeepsTheRelationAndTracksEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewIndex_lifecycleKeepsTheRelationAndTracksEligibility$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/migrate/planmatview.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestMatViewIndex_lifecycleKeepsTheRelationAndTracksEligibility"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSurface_pg14AcceptsTheWholeIndexSurface"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "8",
+      "batch": "D2",
+      "name": "unique ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/uniqueness"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/^uniqueness$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/8/anchor.txt",
+        "replacement": "classes/8/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing uniqueness, so a unique index and a plain one over the same keys are the same object."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/unique"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^unique$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/unique"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/uniqueness"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "9",
+      "batch": "D2",
+      "name": "key order ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSameIndex_keyOrderIsCompared"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_keyOrderIsCompared$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/schema/equal.go",
+        "anchor": "classes/9/anchor.txt",
+        "replacement": "classes/9/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex sorts the key lists by name before comparing them, so (a, b) and (b, a) are the same index."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/axes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestMutationFixturePrecondition$/^axes$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSameIndex_keyOrderIsCompared"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_keyOrderIsCompared$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/schema/equal.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSameIndex_keyOrderIsCompared"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSameIndex_keyOrderIsCompared"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "10",
+      "batch": "D2",
+      "name": "ASC/DESC ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/direction"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/^direction$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/schema/equal.go",
+        "anchor": "classes/10/anchor.txt",
+        "replacement": "classes/10/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing key direction, so ASC and DESC on the same key are the same index."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/axes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestMutationFixturePrecondition$/^axes$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/direction"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/^direction$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/schema/equal.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/direction"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/direction"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "11",
+      "batch": "D2",
+      "name": "NULLS FIRST/LAST ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/nulls_ordering"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/^nulls_ordering$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/schema/equal.go",
+        "anchor": "classes/11/anchor.txt",
+        "replacement": "classes/11/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing NULLS ordering, so NULLS FIRST and NULLS LAST on the same key are the same index."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/axes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestMutationFixturePrecondition$/^axes$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/nulls_ordering"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/^nulls_ordering$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/schema/equal.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/nulls_ordering"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/nulls_ordering"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "12",
+      "batch": "D2",
+      "name": "GIN/method ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/gin_method",
+          "TestSameIndex_eachAxisAlone/method"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/(^gin_method$|^method$)"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/12/anchor.txt",
+        "replacement": "classes/12/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex exempts gin from the method comparison, so GIN metadata specifically becomes ineffective while other methods are still compared."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/method_gin"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^method_gin$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 3,
+        "killer_passed": 3,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/method_gin"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/gin_method"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "13",
+      "batch": "D2",
+      "name": "GiST ignored",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/13/anchor.txt",
+        "replacement": "classes/13/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing the access method whenever either side is gist,",
+          "so GiST metadata specifically becomes ineffective while every other",
+          "method is still compared. The other-method axes therefore stay green,",
+          "which is what makes this a GiST class rather than a method class."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/method_gist"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^method_gist$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewIndexMethod_gistDriftIsReported",
+          "TestMatViewIndexMethod_gistDriftIsReportedFromEitherSide"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewIndexMethod_gistDrift"
+        ]
+      },
+      "authority_killer": {
+        "expect": [
+          "TestIndexComparison_thePlannerAndTheDriftCheckAgree/method_gist"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_thePlannerAndTheDriftCheckAgree$/^method_gist$"
+        ]
+      },
+      "note": [
+        "The mutation attacks schema's index comparison, which is the drift",
+        "authority. migrate has its own copy for planning, so a planner killer",
+        "is green under this mutation and was the killer-execution failure the",
+        "first run reported. The killer is therefore the drift path, and the",
+        "authority test that pins the two copies together is recorded beside it."
+      ],
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/method_gist"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewIndexMethod_gistDriftIsReported",
+          "TestMatViewIndexMethod_gistDriftIsReportedFromEitherSide"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "14",
+      "batch": "D2",
+      "name": "BRIN ignored",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/14/anchor.txt",
+        "replacement": "classes/14/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing the access method whenever either side is brin,",
+          "so BRIN metadata specifically becomes ineffective while every other",
+          "method is still compared."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/method_brin"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^method_brin$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewIndexMethod_brinDriftIsReported",
+          "TestMatViewIndexMethod_brinDriftIsReportedFromEitherSide"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewIndexMethod_brinDrift"
+        ]
+      },
+      "authority_killer": {
+        "expect": [
+          "TestIndexComparison_thePlannerAndTheDriftCheckAgree/method_brin"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_thePlannerAndTheDriftCheckAgree$/^method_brin$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/method_brin"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewIndexMethod_brinDriftIsReported",
+          "TestMatViewIndexMethod_brinDriftIsReportedFromEitherSide"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "15",
+      "batch": "D2",
+      "name": "partial predicate ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/predicate"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/^predicate$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/15/anchor.txt",
+        "replacement": "classes/15/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing the partial predicate, so two indexes over the same keys with different WHERE clauses are the same index."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/predicate"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^predicate$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/predicate"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/predicate"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "16",
+      "batch": "D2",
+      "name": "INCLUDE ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/INCLUDE"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/^INCLUDE$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/16/anchor.txt",
+        "replacement": "classes/16/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing INCLUDE, so a covering index and a plain one are the same object."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/INCLUDE_contents"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^INCLUDE_contents$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/INCLUDE_contents"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/INCLUDE"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "17",
+      "batch": "D2",
+      "name": "expression key simplified",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSameIndex_expressionsAreCompared"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_expressionsAreCompared$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/schema/equal.go",
+        "anchor": "classes/17/anchor.txt",
+        "replacement": "classes/17/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing key expressions, so an index over lower(title) and one over a plain column are the same index."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/axes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestMutationFixturePrecondition$/^axes$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSameIndex_expressionsAreCompared"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_expressionsAreCompared$"
+        ]
+      },
+      "note": [
+        "The expression case in the axis table moves three slots, because an",
+        "expression key has no name and no operator class. It is therefore caught",
+        "by the key-name comparison whether or not expressions are compared, and",
+        "is not a valid killer for this class. The one-axis question is two",
+        "different expressions, which is TestSameIndex_expressionsAreCompared.",
+        "The fixture precondition records the three-slot count for the same reason."
+      ],
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/schema/equal.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSameIndex_expressionsAreCompared"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSameIndex_expressionsAreCompared"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "18",
+      "batch": "D2",
+      "name": "operator class stripped",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/operator_class"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/^operator_class$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/schema/equal.go",
+        "anchor": "classes/18/anchor.txt",
+        "replacement": "classes/18/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing operator classes, so text_pattern_ops and the default are the same index."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/axes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestMutationFixturePrecondition$/^axes$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSameIndex_eachAxisAlone/operator_class"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/schema",
+          "-run",
+          "^TestSameIndex_eachAxisAlone$/^operator_class$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/schema/equal.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/operator_class"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSameIndex_eachAxisAlone/operator_class"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "19",
+      "batch": "D2",
+      "name": "cross-schema owner collapsed",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/migrate/ops_matview.go",
+        "anchor": "classes/19/anchor.txt",
+        "replacement": "classes/19/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "indexHolderOf resolves an index's owner by relation name alone, so the",
+          "schema an operation names is ignored and a namesake in another schema",
+          "can be selected instead."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c19"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c19$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestSchemaIdentity_indexOperationsResolveByQualifiedOwner"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestSchemaIdentity_indexOperationsResolveByQualifiedOwner$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestSchemaIdentity_indexOperationsResolveByQualifiedOwner",
+          "TestChain_replayThroughTheArtifact"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestSchemaIdentity_indexOperationsResolveByQualifiedOwner$|^TestChain_replayThroughTheArtifact$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestSchemaIdentity_indexOperationsResolveByQualifiedOwner"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSchemaIdentity_indexOperationsResolveByQualifiedOwner"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/migrate/ops_matview.go"
+        ]
+      }
+    },
+    {
+      "id": "20",
+      "batch": "D3",
+      "name": "non-unique qualifies",
+      "result": "TRUE_NO_OP",
+      "combined_proof": "20C",
+      "mutation": {
+        "file": "internal/gen/eligible/eligible.go",
+        "anchor": "classes/20/anchor.txt",
+        "replacement": "classes/20/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "Qualifies stops requiring uniqueness. Production can never supply a",
+          "non-unique candidate \u2014 they are built from the table's unique indexes \u2014",
+          "so no fixture reaches it. 20C supplies one directly."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/cEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^cEligibility$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestChoose_uniqueIsCheckedNotAssumed"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestChoose_uniqueIsCheckedNotAssumed$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewEligibility_onlyPlainUniqueIndexesQualify$"
+        ]
+      },
+      "expect_result": "TRUE_NO_OP",
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 9,
+        "killer_passed": 9,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/eligible/eligible.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestChoose_uniqueIsCheckedNotAssumed"
+        ],
+        "killer_reachability": false,
+        "killer_failures_under_mutant": [],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "20C",
+      "batch": "D3",
+      "name": "non-unique qualifies, combined bypass",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestChoose_uniqueIsCheckedNotAssumed"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestChoose_uniqueIsCheckedNotAssumed$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/eligible/eligible.go",
+        "anchor": "classes/20C/anchor.txt",
+        "replacement": "classes/20C/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The same mutation, with a killer that supplies a non-unique candidate",
+          "directly instead of going through a production path that cannot. This is",
+          "what shows the rule is load-bearing rather than dead code."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/cEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^cEligibility$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestChoose"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestChoose$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 11,
+        "semantic_passed": 11,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/eligible/eligible.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestChoose",
+          "TestChoose/a_non-unique_index",
+          "TestChoose/one_qualifying_among_disqualified_ones"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestChoose_uniqueIsCheckedNotAssumed"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "21",
+      "batch": "D3",
+      "name": "partial UNIQUE qualifies",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewEligibility_onlyPlainUniqueIndexesQualify$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/eligible/eligible.go",
+        "anchor": "classes/21/anchor.txt",
+        "replacement": "classes/21/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "A partial unique index qualifies for a concurrent refresh. It constrains only",
+          "the rows it covers, so PostgreSQL was always going to reject the REFRESH."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/cEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^cEligibility$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestChoose"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestChoose$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 9,
+        "killer_passed": 9,
+        "killer_skipped": 0,
+        "semantic_ran": 11,
+        "semantic_passed": 11,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/eligible/eligible.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestChoose",
+          "TestChoose/a_partial_unique_index,_which_covers_only_some_rows",
+          "TestChoose/one_qualifying_among_disqualified_ones"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify",
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify/a_partial_unique_index",
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify/several_indexes,_none_qualifying"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "22",
+      "batch": "D3",
+      "name": "expression UNIQUE qualifies",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewEligibility_onlyPlainUniqueIndexesQualify$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/eligible/eligible.go",
+        "anchor": "classes/22/anchor.txt",
+        "replacement": "classes/22/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "An expression unique index qualifies. It has no column list to match rows by,",
+          "so PostgreSQL was always going to reject the REFRESH."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/cEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^cEligibility$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestChoose"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestChoose$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 9,
+        "killer_passed": 9,
+        "killer_skipped": 0,
+        "semantic_ran": 11,
+        "semantic_passed": 11,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/eligible/eligible.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestChoose",
+          "TestChoose/an_expression_unique_index,_which_has_no_columns_to_match_rows_by"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify",
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify/a_unique_index_mixing_a_column_and_an_expression"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "23",
+      "batch": "D3",
+      "name": "mixed plain/expression qualifies",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewEligibility_onlyPlainUniqueIndexesQualify$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/pgintro/introspect.go",
+        "anchor": "classes/23/anchor.txt",
+        "replacement": "classes/23/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "An index whose keys mix a plain column and an expression is recorded as plain,",
+          "because the expression flag is only set when every key is one. It then",
+          "qualifies for a concurrent refresh the server will reject."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/cEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^cEligibility$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestRefreshRuntime_nonQualifyingShapesSendNothing$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 9,
+        "killer_passed": 9,
+        "killer_skipped": 0,
+        "semantic_ran": 7,
+        "semantic_passed": 7,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/pgintro/introspect.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing",
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing/a_unique_index_mixing_a_plain_column_and_an_expression"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify",
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify/a_unique_index_mixing_a_column_and_an_expression"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "24",
+      "batch": "D3",
+      "name": "UNIQUE + INCLUDE disqualifies",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewEligibility_onlyPlainUniqueIndexesQualify$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/pgintro/introspect.go",
+        "anchor": "classes/24/anchor.txt",
+        "replacement": "classes/24/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "A unique index carrying INCLUDE columns is recorded as partial, so it stops",
+          "qualifying. INCLUDE columns are not part of the key and constrain nothing, so",
+          "such an index does cover every row and PostgreSQL accepts it. This is the",
+          "class in the opposite direction: a rule refusing what is valid."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/cEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^cEligibility$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestIntrospect_uniqueIndexClassification"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/pgintro",
+          "-run",
+          "^TestIntrospect_uniqueIndexClassification$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 9,
+        "killer_passed": 9,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/pgintro/introspect.go"
+        ],
+        "source_changed": true,
+        "restore_clean": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestIntrospect_uniqueIndexClassification"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify",
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify/a_unique_index_with_INCLUDE"
+        ]
+      }
+    },
+    {
+      "id": "25",
+      "batch": "D3",
+      "name": "normal Refresh requires eligibility",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestRefreshRuntime_nonQualifyingShapesSendNothing$"
+        ]
+      },
+      "mutation": {
+        "file": "view.go",
+        "anchor": "classes/25/anchor.txt",
+        "replacement": "classes/25/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The preflight stops requiring a qualifying index, so Refresh(Concurrently)",
+          "sends a statement the server was always going to reject \u2014 taking the lock it",
+          "was avoiding and letting the server do the refusing."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c31"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c31$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestMatView_concurrentlyNeedsAQualifyingIndex"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/viewdemo",
+          "-run",
+          "^TestMatView_concurrentlyNeedsAQualifyingIndex$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 7,
+        "killer_passed": 7,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "view.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestMatView_concurrentlyNeedsAQualifyingIndex"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing",
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing/a_partial_unique_index",
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing/a_unique_index_mixing_a_plain_column_and_an_expression",
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing/an_expression_unique_index",
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing/only_a_non-unique_index",
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing/several_indexes,_none_of_them_qualifying",
+          "TestRefreshRuntime_nonQualifyingShapesSendNothing/the_same_non-qualifying_set,_declared_in_the_other_order"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "26",
+      "batch": "D3",
+      "name": "CONCURRENTLY + WITH NO DATA guard removed",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatView_concurrentlyWithNoDataIsRefused"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/viewdemo",
+          "-run",
+          "^TestMatView_concurrentlyWithNoDataIsRefused$"
+        ]
+      },
+      "mutation": {
+        "file": "view.go",
+        "anchor": "classes/26/anchor.txt",
+        "replacement": "classes/26/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "CONCURRENTLY combined with WITH NO DATA is accepted and sent. A concurrent",
+          "refresh replaces contents row by row and there are no rows to replace with."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c31"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c31$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestMatView_concurrentlyWithNoDataIsRefused"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/viewdemo",
+          "-run",
+          "^TestMatView_concurrentlyWithNoDataIsRefused$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "view.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestMatView_concurrentlyWithNoDataIsRefused"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatView_concurrentlyWithNoDataIsRefused"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "27",
+      "batch": "D4",
+      "name": "qualifying index omitted from MatView fingerprint",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/lock/lock.go",
+        "anchor": "classes/27/anchor.txt",
+        "replacement": "classes/27/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The qualifying index leaves the fingerprint material: the mapping digest",
+          "no longer varies with which index a concurrent refresh may use, so an",
+          "eligibility-changing migration moves nothing and the committed generated",
+          "descriptor is never reported stale."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c27"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c27$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestFingerprint_movesWhenAQualifyingIndexAppears"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestFingerprint_movesWhenAQualifyingIndexAppears$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 5,
+        "killer_passed": 5,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestFingerprint_movesWhenAQualifyingIndexAppears"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported",
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported/a_qualifying_index_becomes_an_expression",
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported/a_qualifying_index_becomes_partial",
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported/a_qualifying_index_is_added",
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported/a_qualifying_index_is_removed"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/lock/lock.go"
+        ]
+      }
+    },
+    {
+      "id": "28",
+      "batch": "D4",
+      "name": "table indexes enter table fingerprint",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/lock/lock.go",
+        "anchor": "classes/28/anchor.txt",
+        "replacement": "classes/28/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "An ordinary table's unique indexes are written into its fingerprint",
+          "material. A table's generated code does not depend on its indexes, so",
+          "every table-only project's lock moves on an index change that changed",
+          "nothing about what was generated."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c28"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c28$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestFingerprint_tableIndexesDoNotMoveIt"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestFingerprint_tableIndexesDoNotMoveIt$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestTableOnly_anIndexChangeDoesNotMoveTheGeneratedIdentity"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestTableOnly_anIndexChangeDoesNotMoveTheGeneratedIdentity$"
+        ]
+      },
+      "note": [
+        "The first killer was TestTableOnly_bytesAreStable, which compares two runs",
+        "of one project. Both runs carry the same leaked index metadata, so it is",
+        "green under the mutation. Byte stability across runs is a different",
+        "property from index metadata staying out of the fingerprint."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/lock/lock.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestFingerprint_tableIndexesDoNotMoveIt"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestTableOnly_anIndexChangeDoesNotMoveTheGeneratedIdentity"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "29",
+      "batch": "D4",
+      "name": "eligibility algorithm duplicated",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewEligibility_onlyPlainUniqueIndexesQualify$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/model/model.go",
+        "anchor": "classes/29/anchor.txt",
+        "replacement": "classes/29/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The call site restates the eligibility rule locally instead of passing its",
+          "candidates through the one package that owns it, and the restatement has",
+          "drifted: it forgets that an expression index has no column list to match rows",
+          "by. That is the shape the eligible package exists to make impossible."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/cEligibility"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^cEligibility$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestFingerprint_ignoresIndexesThatCannotQualify"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestFingerprint_ignoresIndexesThatCannotQualify$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 9,
+        "killer_passed": 9,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/model/model.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestFingerprint_ignoresIndexesThatCannotQualify"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify",
+          "TestMatViewEligibility_onlyPlainUniqueIndexesQualify/a_unique_index_mixing_a_column_and_an_expression"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "30",
+      "batch": "D4",
+      "name": "stale-negative reports current",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/lock/lock.go",
+        "anchor": "classes/30/anchor.txt",
+        "replacement": "classes/30/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "Compare accepts a fingerprint that does not match the lock, so generated",
+          "code produced from a different mapping is reported as current."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c30"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c30$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompare_statesAreDistinguished/the_digests_differ"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestCompare_statesAreDistinguished$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 5,
+        "killer_passed": 5,
+        "killer_skipped": 0,
+        "semantic_ran": 6,
+        "semantic_passed": 6,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompare_statesAreDistinguished/the_digests_differ"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported",
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported/a_qualifying_index_becomes_an_expression",
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported/a_qualifying_index_becomes_partial",
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported/a_qualifying_index_is_added",
+          "TestMatViewEligibility_staleGeneratedCodeIsAlwaysReported/a_qualifying_index_is_removed"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/lock/lock.go"
+        ]
+      }
+    },
+    {
+      "id": "31",
+      "batch": "D4",
+      "name": "stale-positive PgError swallowed",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "view.go",
+        "anchor": "classes/31/anchor.txt",
+        "replacement": "classes/31/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "A failed concurrent refresh returns the local preflight message instead of",
+          "the server's error, so PostgreSQL's refusal never reaches the caller and",
+          "errors.As finds no PgError under it."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c31"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c31$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestMatView_withNoDataLeavesItUnreadable"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/viewdemo",
+          "-run",
+          "^TestMatView_withNoDataLeavesItUnreadable$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestRefreshRuntime_staleOptimisticDescriptorDefersToPostgreSQL"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestRefreshRuntime_staleOptimisticDescriptorDefersToPostgreSQL$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestMatView_withNoDataLeavesItUnreadable"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestRefreshRuntime_staleOptimisticDescriptorDefersToPostgreSQL"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "view.go"
+        ]
+      }
+    },
+    {
+      "id": "32",
+      "batch": "D4",
+      "name": "runtime population enters generated state",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/lock/lock.go",
+        "anchor": "classes/32/anchor.txt",
+        "replacement": "classes/32/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "Whether the materialized view currently holds data is written into the",
+          "portable mapping fingerprint, so an ordinary refresh reports committed",
+          "generated code as stale."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c32"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c32$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestFingerprint_populationDoesNotMoveIt"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestFingerprint_populationDoesNotMoveIt$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewPopulation_isNotGeneratedIdentity"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewPopulation_isNotGeneratedIdentity$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestFingerprint_populationDoesNotMoveIt"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewPopulation_isNotGeneratedIdentity"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/lock/lock.go"
+        ]
+      }
+    },
+    {
+      "id": "33",
+      "batch": "D5",
+      "name": "missing index ignored",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/reconcile/matindex.go",
+        "anchor": "classes/33/anchor.txt",
+        "replacement": "classes/33/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "CheckMaterializedIndexes drops the findings that say an index is",
+          "only in the declarations, so a declared index the database does not",
+          "have is never reported. A changed index and a live index nobody",
+          "declared still are, which is what makes this the missing-index class",
+          "rather than index checking removed."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMaterializedIndexes_theThreeShapesAreReportedSeparately/an_index_missing_from_the_database"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/reconcile",
+          "-run",
+          "^TestMaterializedIndexes_theThreeShapesAreReportedSeparately$/^an_index_missing_from_the_database$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestMaterializedIndexes_theThreeShapesAreReportedSeparately/an_index_missing_from_the_database"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/reconcile",
+          "-run",
+          "^TestMaterializedIndexes_theThreeShapesAreReportedSeparately$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestMatViewDrift_missingIndex"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewDrift_missingIndex$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 4,
+        "semantic_passed": 4,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestMaterializedIndexes_theThreeShapesAreReportedSeparately/an_index_missing_from_the_database"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewDrift_missingIndex"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/reconcile/matindex.go"
+        ]
+      }
+    },
+    {
+      "id": "34",
+      "batch": "D5",
+      "name": "changed predicate ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewDrift_changedIndex/a_changed_predicate"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewDrift_changedIndex$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/34/anchor.txt",
+        "replacement": "classes/34/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing the partial predicate. #15 attacks the same comparison as declared metadata; this attacks it as drift against a live database."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/predicate"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^predicate$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 5,
+        "killer_passed": 5,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/predicate"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewDrift_changedIndex/a_changed_predicate"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "35",
+      "batch": "D5",
+      "name": "changed method ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewDrift_changedIndex/a_changed_method"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewDrift_changedIndex$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/35/anchor.txt",
+        "replacement": "classes/35/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing the access method entirely, so every method is the same as every other."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/method"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^method$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 5,
+        "killer_passed": 5,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/method"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewDrift_changedIndex/a_changed_method"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "36",
+      "batch": "D5",
+      "name": "changed uniqueness ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewDrift_changedIndex/a_lost_uniqueness"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewDrift_changedIndex$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/36/anchor.txt",
+        "replacement": "classes/36/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing uniqueness, attacked as drift: an index that lost its uniqueness by hand."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/unique"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^unique$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 5,
+        "killer_passed": 5,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/unique"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewDrift_changedIndex/a_lost_uniqueness"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "37",
+      "batch": "D5",
+      "name": "changed INCLUDE ignored",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestMatViewDrift_changedIndex/a_changed_INCLUDE"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMatViewDrift_changedIndex$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/indexcmp/indexcmp.go",
+        "anchor": "classes/37/anchor.txt",
+        "replacement": "classes/37/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "sameIndex stops comparing INCLUDE, attacked as drift: an index given a covering column by hand."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestEqual_anIndexIsItself"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_anIndexIsItself$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestEqual_eachAxisAlone/INCLUDE_contents"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/indexcmp",
+          "-run",
+          "^TestEqual_eachAxisAlone$/^INCLUDE_contents$"
+        ]
+      },
+      "adapter_proof": {
+        "planner": "TestIndexComparison_thePlannerRoutesThroughTheCanonicalRule",
+        "drift": "TestIndexComparison_theDriftCheckRoutesThroughTheCanonicalRule",
+        "agreement": "TestIndexComparison_thePlannerAndTheDriftCheckAgree",
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/migrate",
+          "-run",
+          "^TestIndexComparison_"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 5,
+        "killer_passed": 5,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/indexcmp/indexcmp.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestEqual_eachAxisAlone/INCLUDE_contents"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestMatViewDrift_changedIndex/a_changed_INCLUDE"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "38",
+      "batch": "D6",
+      "name": "first encountered qualifying wins",
+      "result": "TRUE_NO_OP",
+      "combined_proof": "38C",
+      "mutation": {
+        "file": "internal/gen/eligible/eligible.go",
+        "anchor": "classes/38/anchor.txt",
+        "replacement": "classes/38/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The chooser keeps whichever qualifying candidate arrived first. Unique",
+          "indexes are read with ORDER BY ic.relname, so they arrive lowest-name-first",
+          "and the first met is the lowest named: nothing end to end can observe it.",
+          "38C supplies them out of order directly."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c40"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c40$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestChoose_isOrderIndependent"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestChoose_isOrderIndependent$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestSurface_qualifyingSelectionIsOrderIndependent"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestSurface_qualifyingSelectionIsOrderIndependent$"
+        ]
+      },
+      "expect_result": "TRUE_NO_OP",
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/eligible/eligible.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestChoose_isOrderIndependent"
+        ],
+        "killer_reachability": false,
+        "killer_failures_under_mutant": [],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "38C",
+      "batch": "D6",
+      "name": "first encountered wins, combined bypass",
+      "result": "CAUGHT",
+      "killer": {
+        "expect": [
+          "TestChoose_doesNotDependOnInputOrder",
+          "TestChoose_isOrderIndependent"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestChoose_doesNotDependOnInputOrder$|^TestChoose_isOrderIndependent$"
+        ]
+      },
+      "mutation": {
+        "file": "internal/gen/eligible/eligible.go",
+        "anchor": "classes/38C/anchor.txt",
+        "replacement": "classes/38C/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The same mutation, with killers that supply the candidates out of name",
+          "order directly. #40 is the other half of this: the same chooser attacked",
+          "together with the catalog ordering that absorbs it."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c40"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c40$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestChoose"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestChoose$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 2,
+        "killer_passed": 2,
+        "killer_skipped": 0,
+        "semantic_ran": 11,
+        "semantic_passed": 11,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/eligible/eligible.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestChoose",
+          "TestChoose/the_lowest_name_among_several",
+          "TestChoose/the_same_set_in_another_order"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestChoose_doesNotDependOnInputOrder",
+          "TestChoose_isOrderIndependent"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "39",
+      "batch": "D6",
+      "name": "declaration order affects selection",
+      "result": "CAUGHT",
+      "mutation": [
+        {
+          "file": "internal/gen/pgintro/introspect.go",
+          "anchor": "classes/order-bypass/anchor.txt",
+          "replacement": "classes/order-bypass/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "Unique indexes are read in descending name order, so the model no longer",
+            "receives them lowest-name-first. This is the second of the two",
+            "independent ordering guarantees; on its own it is absorbed by the",
+            "chooser, which is why it is applied together with the site below."
+          ]
+        },
+        {
+          "file": "internal/gen/model/model.go",
+          "anchor": "classes/39/anchor.txt",
+          "replacement": "classes/39/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "The call site bypasses the canonical chooser and returns the first",
+            "qualifying candidate it meets, so selection follows the order the",
+            "declarations were written in rather than a stable rule."
+          ]
+        }
+      ],
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c39"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c39$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestFingerprint_picksTheSameIndexWhicheverOrderTheyArriveIn"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestFingerprint_picksTheSameIndexWhicheverOrderTheyArriveIn$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestSurface_qualifyingSelectionIsOrderIndependent"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestSurface_qualifyingSelectionIsOrderIndependent$"
+        ]
+      },
+      "note": [
+        "Selection order is guaranteed twice: by ORDER BY ic.relname when the",
+        "catalog is read, and by the chooser taking the lowest qualifying name.",
+        "Either alone is sufficient, so a single-site mutation is absorbed and is",
+        "neither a survivor nor a no-op. The recorded mutation is the combined",
+        "bypass; the narrow probe beside it shows the single site really was",
+        "expressed."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/pgintro/introspect.go",
+          "internal/gen/model/model.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestFingerprint_picksTheSameIndexWhicheverOrderTheyArriveIn"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSurface_qualifyingSelectionIsOrderIndependent"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "40",
+      "batch": "D6",
+      "name": "catalog order affects selection",
+      "result": "CAUGHT",
+      "mutation": [
+        {
+          "file": "internal/gen/pgintro/introspect.go",
+          "anchor": "classes/order-bypass/anchor.txt",
+          "replacement": "classes/order-bypass/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "Unique indexes are read in descending name order, so the model no longer",
+            "receives them lowest-name-first. This is the second of the two",
+            "independent ordering guarantees; on its own it is absorbed by the",
+            "chooser, which is why it is applied together with the site below."
+          ]
+        },
+        {
+          "file": "internal/gen/eligible/eligible.go",
+          "anchor": "classes/40/anchor.txt",
+          "replacement": "classes/40/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "The chooser keeps whichever qualifying candidate arrived first instead of",
+            "the lowest name, so the answer depends on the order a catalog or a",
+            "declaration happened to supply."
+          ]
+        }
+      ],
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c40"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c40$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestChoose_isOrderIndependent",
+          "TestChoose_doesNotDependOnInputOrder"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/eligible",
+          "-run",
+          "^TestChoose_isOrderIndependent$|^TestChoose_doesNotDependOnInputOrder$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestSurface_qualifyingSelectionIsOrderIndependent"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestSurface_qualifyingSelectionIsOrderIndependent$"
+        ]
+      },
+      "note": [
+        "Selection order is guaranteed twice: by ORDER BY ic.relname when the",
+        "catalog is read, and by the chooser taking the lowest qualifying name.",
+        "Either alone is sufficient, so a single-site mutation is absorbed and is",
+        "neither a survivor nor a no-op. The recorded mutation is the combined",
+        "bypass; the narrow probe beside it shows the single site really was",
+        "expressed."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/pgintro/introspect.go",
+          "internal/gen/eligible/eligible.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestChoose_doesNotDependOnInputOrder",
+          "TestChoose_isOrderIndependent"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSurface_qualifyingSelectionIsOrderIndependent"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "41",
+      "batch": "D6",
+      "name": "PostgreSQL major enters fingerprint",
+      "result": "CAUGHT",
+      "mutation": [
+        {
+          "file": "internal/gen/pgintro/introspect.go",
+          "anchor": "classes/41/capture/anchor.txt",
+          "replacement": "classes/41/capture/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "The PostgreSQL major is read from the server during introspection and",
+            "carried into the model, so the portable fingerprint becomes a",
+            "statement about which major produced it."
+          ]
+        },
+        {
+          "file": "internal/gen/lock/lock.go",
+          "anchor": "classes/server-leak/anchor.txt",
+          "replacement": "classes/server-leak/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "What introspection recorded about the server it read reaches the portable",
+            "mapping digest. On its own this leaks only the configured search path,",
+            "which is a project fact; it is the capture site beside it that makes the",
+            "leaked value server-local."
+          ]
+        }
+      ],
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c41"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c41$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestFingerprint_doesNotDependOnWhatItWasIntrospectedFrom"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestFingerprint_doesNotDependOnWhatItWasIntrospectedFrom$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestSurface_portableAcrossMajors"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestSurface_portableAcrossMajors$"
+        ]
+      },
+      "note": [
+        "The fingerprint's input carries no server major and no database name, so",
+        "there is no value in scope for a single-site mutation to leak. The class is",
+        "therefore expressed as the two steps a real defect would take: capture the",
+        "fact while a connection is in hand, then write it into the portable digest."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/pgintro/introspect.go",
+          "internal/gen/lock/lock.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestFingerprint_doesNotDependOnWhatItWasIntrospectedFrom"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSurface_portableAcrossMajors"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "42",
+      "batch": "D6",
+      "name": "database name enters fingerprint",
+      "result": "CAUGHT",
+      "mutation": [
+        {
+          "file": "internal/gen/pgintro/introspect.go",
+          "anchor": "classes/42/capture/anchor.txt",
+          "replacement": "classes/42/capture/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "The database name is read from the server during introspection and",
+            "carried into the model, so one project produces a different lock in",
+            "every database it is generated against."
+          ]
+        },
+        {
+          "file": "internal/gen/lock/lock.go",
+          "anchor": "classes/server-leak/anchor.txt",
+          "replacement": "classes/server-leak/replacement.txt",
+          "count": 1,
+          "expresses": [
+            "What introspection recorded about the server it read reaches the portable",
+            "mapping digest. On its own this leaks only the configured search path,",
+            "which is a project fact; it is the capture site beside it that makes the",
+            "leaked value server-local."
+          ]
+        }
+      ],
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c42"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c42$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestFingerprint_doesNotDependOnWhatItWasIntrospectedFrom"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestFingerprint_doesNotDependOnWhatItWasIntrospectedFrom$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestSurface_portableAcrossMajors"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestSurface_portableAcrossMajors$"
+        ]
+      },
+      "note": [
+        "The fingerprint's input carries no server major and no database name, so",
+        "there is no value in scope for a single-site mutation to leak. The class is",
+        "therefore expressed as the two steps a real defect would take: capture the",
+        "fact while a connection is in hand, then write it into the portable digest."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/pgintro/introspect.go",
+          "internal/gen/lock/lock.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestFingerprint_doesNotDependOnWhatItWasIntrospectedFrom"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSurface_portableAcrossMajors"
+        ],
+        "restore_clean": true
+      }
+    },
+    {
+      "id": "43",
+      "batch": "D6",
+      "name": "OID enters fingerprint",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/lock/lock.go",
+        "anchor": "classes/43/anchor.txt",
+        "replacement": "classes/43/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The relation's OID is written into the portable fingerprint. Two databases",
+          "built from one migration assign different OIDs, so one project produces",
+          "different locks on different servers."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c43"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c43$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestFingerprint_serverLocalFactsDoNotMoveIt"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestFingerprint_serverLocalFactsDoNotMoveIt$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestSurface_portableAcrossMajors"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestSurface_portableAcrossMajors$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestFingerprint_serverLocalFactsDoNotMoveIt"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSurface_portableAcrossMajors"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/lock/lock.go"
+        ]
+      }
+    },
+    {
+      "id": "44",
+      "batch": "D6",
+      "name": "ServerCanonical enters portable state",
+      "result": "CAUGHT",
+      "mutation": {
+        "file": "internal/gen/lock/lock.go",
+        "anchor": "classes/44/anchor.txt",
+        "replacement": "classes/44/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "The server's deparsed definition \u2014 ServerCanonical \u2014 is written into the",
+          "portable fingerprint, crossing the F0 boundary. PostgreSQL 16 stopped",
+          "qualifying columns it need not, so one unchanged declaration produces",
+          "different portable bytes on 14 and 16."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition/c44"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition$/^c44$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestFingerprint_serverLocalFactsDoNotMoveIt"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/lock",
+          "-run",
+          "^TestFingerprint_serverLocalFactsDoNotMoveIt$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestSurface_portableAcrossMajors"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestSurface_portableAcrossMajors$"
+        ]
+      },
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestFingerprint_serverLocalFactsDoNotMoveIt"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestSurface_portableAcrossMajors"
+        ],
+        "restore_clean": true,
+        "mutation_sites": [
+          "internal/gen/lock/lock.go"
+        ]
+      }
+    },
+    {
+      "id": "47",
+      "batch": "D7",
+      "name": "Type discovery narrows back to table columns",
+      "result": "CAUGHT",
+      "evidence_commit": "19158d9",
+      "mutation": {
+        "file": "internal/gen/pgintro/introspect.go",
+        "anchor": "classes/47/anchor.txt",
+        "replacement": "classes/47/replacement.txt",
+        "count": 1,
+        "expresses": [
+          "Type discovery walks table columns only, while column resolution covers",
+          "every readable relation. A type that appears solely on a view or",
+          "materialized view column \u2014 count(*) is bigint in a schema that stores no",
+          "bigint \u2014 then resolves against a map that never loaded it, and",
+          "introspection fails with \"has type OID 20, which was not loaded\"."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestMutationFixturePrecondition_derivedTypes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestMutationFixturePrecondition_derivedTypes$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestIntrospect_viewAggregateResolvesToItsBuiltInType",
+          "TestIntrospect_materializedViewAggregatesResolveToTheirBuiltInTypes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/gen/pgintro",
+          "-run",
+          "^TestIntrospect_(viewAggregateResolvesToItsBuiltInType|materializedViewAggregatesResolveToTheirBuiltInTypes)$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestDerivedType_aggregateColumnsGenerate"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./cmd/orm",
+          "-run",
+          "^TestDerivedType_aggregateColumnsGenerate$"
+        ]
+      },
+      "note": [
+        "The killer is end to end because that is the level the defect was reported",
+        "at: a project generating against a database whose only bigint is a",
+        "count(*). The semantic pair is the same property at the introspector, on a",
+        "view and on a materialized view, because the defect was never specific to",
+        "materialized ones.",
+        "This class was added after the batches above and ran on its own, in an",
+        "isolated worktree checked out at 19158d9 - the commit that carries the fix,",
+        "the fixture and this entry. The manifest-level evidence_commit covers the",
+        "earlier batches and is left as it was, because rewriting it would claim they",
+        "were re-run when they were not."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 1,
+        "precondition_passed": 1,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 2,
+        "semantic_passed": 2,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/gen/pgintro/introspect.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestIntrospect_materializedViewAggregatesResolveToTheirBuiltInTypes",
+          "TestIntrospect_viewAggregateResolvesToItsBuiltInType"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestDerivedType_aggregateColumnsGenerate"
+        ],
+        "restore_clean": true
+      }
+    }
+  ],
+  "evidence_commit_note": [
+    "bddf3d6 is the revision the mutations were applied to and the killers run at,",
+    "in an isolated worktree checked out at exactly that commit.",
+    "",
+    "Recording it here necessarily produces a later commit, because this file is in",
+    "the repository. That commit differs from bddf3d6 by this file alone \u2014 no Go",
+    "source, no test \u2014 so the code under test and the code at HEAD are the same.",
+    "An earlier pass recorded the commit before the one it ran against, which is the",
+    "same slip in the other direction and is why the rule is written down."
+  ]
+}

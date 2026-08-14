@@ -1,0 +1,821 @@
+{
+  "comment": [
+    "UNION ALL phase 5: ordering a set operation by its own output columns.",
+    "",
+    "Eight classes. Five attack what this phase introduced — which names may be",
+    "ordered by, that a name carried twice is refused, and that a direction and a",
+    "second term survive from the declaration to the statement. Three attack compiler",
+    "rules ordering is the first thing to make reachable or to make matter: the fixed",
+    "order of a compound's trailing clauses, and the parentheses that keep a nested",
+    "operation's clauses its own.",
+    "",
+    "Two of them, P5-3 and P5-4, are the same observable failure from two different",
+    "causes — the direction lost where the term is built, and lost where it is",
+    "written. They share a killer and have different probes, because a repair to one",
+    "is not evidence about the other.",
+    "",
+    "Every site names the function it is inside, which the harness checks. Three",
+    "probes in this batch were first aimed at a function the mutation did not touch,",
+    "and the campaign refused the classes rather than recording them; naming the",
+    "function makes the level something the author writes down instead of assumes.",
+    "",
+    "Kept apart from the other five manifests, whose accounting is closed. UNION ALL",
+    "is not frozen and this is not the UNION manifest.",
+    "",
+    "Every killer runs in the root module and needs no database, so this campaign",
+    "reproduces on any machine whatever ports are free. Whether the rows actually",
+    "come back in order is a question only a server can answer, and it is answered in",
+    "internal/gendemo/m16_unionorder_test.go."
+  ],
+  "evidence_commit": "ab3e1df",
+  "evidence_commit_note": [
+    "ab3e1df is the revision every UNION ALL class was last applied to and run at, in a",
+    "worktree checked out at exactly that commit, with the manifests read and written",
+    "outside it so the tree stayed clean between classes. It is kept reachable as",
+    "archive/m16-union-mutation-evidence.",
+    "",
+    "The five UNION ALL campaigns were rerun together at one revision after `mutate",
+    "anchors` found four anchors that later phases had silently invalidated by editing",
+    "the code they quote. An anchor that no longer matches makes its class look like a",
+    "survivor, so the campaigns were pinned to revisions where they no longer ran.",
+    "They run again, and three harness controls were active: anchors still quote their",
+    "code, every site names the function its anchor is inside, and each semantic probe",
+    "survives every mutation in another function."
+  ],
+  "not_expressible": [
+    {
+      "id": "P5-8",
+      "name": "An ambiguous ordering term is accepted",
+      "why": [
+        "This was a class, and it was caught. It is now not expressible, which is a",
+        "better outcome than catching it.",
+        "",
+        "It attacked a check in the ordering path that refused a name two result",
+        "columns carry. The check existed because the rule lived at the consumers of",
+        "a shape's name list, and one of four consumers had not asked. The rule moved",
+        "to where the shape is built: a shape is refused unless its names identify its",
+        "columns, so no consumer receives one that does not, and the check in the",
+        "ordering path was removed as a guard on a state that cannot occur.",
+        "",
+        "There is now no mutation that reaches the defect. Removing the shape's rule",
+        "is a different class about a different function, and its own killers are the",
+        "five consumers that inherit it. The precondition subtest kept under this id",
+        "asserts the state stays unreachable, so a change that made it reachable again",
+        "would ask for the class back."
+      ]
+    }
+  ],
+  "classes": [
+    {
+      "id": "P5-1",
+      "batch": "P5",
+      "name": "An ordering term naming a column the result does not have is accepted",
+      "mutation": {
+        "file": "union.go",
+        "anchor": "orderclasses/P5-1/anchor.txt",
+        "replacement": "orderclasses/P5-1/replacement.txt",
+        "count": 1,
+        "function": "UnionQuery.OrderBy",
+        "expresses": [
+          "The check that an ordering term names one of the operation's own output",
+          "columns stops firing, so a name no branch declared reaches the statement and",
+          "PostgreSQL answers with column \"x\" does not exist after a round trip."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestOrderMutationPrecondition/P5-1"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrderMutationPrecondition$/^P5-1$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestOrder_orderByRefusesAStranger"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrder_orderByRefusesAStranger$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionOrder_refusesANameTheResultDoesNotHave"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionOrder_refusesANameTheResultDoesNotHave$"
+        ]
+      },
+      "note": [
+        "Nothing else catches this. The writer emits whatever name it is given —",
+        "it has no idea what the compound's output columns are called — so without",
+        "this check the first thing to notice is the server."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 3,
+        "killer_passed": 3,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "union.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestOrder_orderByRefusesAStranger"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionOrder_refusesANameTheResultDoesNotHave",
+          "TestUnionOrder_refusesANameTheResultDoesNotHave/a_column_no_branch_declares",
+          "TestUnionOrder_refusesANameTheResultDoesNotHave/a_column_only_the_second_branch_declares"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P5-2",
+      "batch": "P5",
+      "name": "Only the first output column can be ordered by",
+      "mutation": {
+        "file": "union.go",
+        "anchor": "orderclasses/P5-2/anchor.txt",
+        "replacement": "orderclasses/P5-2/replacement.txt",
+        "count": 1,
+        "function": "UnionQuery.provides",
+        "expresses": [
+          "The count of result columns carrying a name collapses to the first slot's,",
+          "so ordering by any later column of the result is refused as though it did",
+          "not exist. It is the opposite failure from P5-1 and no error message would",
+          "look wrong."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestOrderMutationPrecondition/P5-2"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrderMutationPrecondition$/^P5-2$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestOrder_theAllowedNamesAreTheShapes"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrder_theAllowedNamesAreTheShapes$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionOrder_sortsBySeveralColumns"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionOrder_sortsBySeveralColumns$"
+        ]
+      },
+      "note": [
+        "A positive killer, because this mutant refuses valid queries rather than",
+        "accepting invalid ones. A negative test would pass under it — the wrong",
+        "names are still refused, and so are the right ones."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "union.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestOrder_theAllowedNamesAreTheShapes"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionOrder_sortsBySeveralColumns"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P5-3",
+      "batch": "P5",
+      "name": "Every ordering term is written ascending",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "orderclasses/P5-3/anchor.txt",
+        "replacement": "orderclasses/P5-3/replacement.txt",
+        "count": 1,
+        "function": "Compound.write",
+        "expresses": [
+          "The direction is dropped in the writer, so a descending ordering is written",
+          "ascending. The statement is valid SQL, it runs, and it returns the rows in",
+          "the reverse of the order that was asked for."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestOrderMutationPrecondition/P5-3"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrderMutationPrecondition$/^P5-3$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_orderingTermsAreOutputNamesWithDirections"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_orderingTermsAreOutputNamesWithDirections$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionOrder_sortsTheWholeResult"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionOrder_sortsTheWholeResult$"
+        ]
+      },
+      "note": [
+        "The semantic probe is at the level of the tree — the term reaches the",
+        "compound carrying its direction — and the killer is at the level of the",
+        "rendered statement, which is where the direction is lost. Neither alone",
+        "would say which half broke."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_orderingTermsAreOutputNamesWithDirections"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionOrder_sortsTheWholeResult"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P5-4",
+      "batch": "P5",
+      "name": "Desc produces an ascending term",
+      "mutation": {
+        "file": "compose.go",
+        "anchor": "orderclasses/P5-4/anchor.txt",
+        "replacement": "orderclasses/P5-4/replacement.txt",
+        "count": 1,
+        "function": "Out.Desc",
+        "expresses": [
+          "The direction is lost where the term is built rather than where it is",
+          "written, so Asc and Desc become the same function. Same observable failure",
+          "as P5-3 and a different cause, which is why both are applied."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestOrderMutationPrecondition/P5-3"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrderMutationPrecondition$/^P5-3$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestOrder_aTermIsANameAndADirection"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrder_aTermIsANameAndADirection$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionOrder_sortsTheWholeResult"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionOrder_sortsTheWholeResult$"
+        ]
+      },
+      "note": [
+        "The semantic probe is the constructor's own: Desc carries a direction and",
+        "Asc does not. It is the half P5-3's probe cannot see, and P5-3's probe is the",
+        "half this one cannot."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "compose.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestOrder_aTermIsANameAndADirection"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionOrder_sortsTheWholeResult"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P5-5",
+      "batch": "P5",
+      "name": "Only the first ordering term is written",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "orderclasses/P5-5/anchor.txt",
+        "replacement": "orderclasses/P5-5/replacement.txt",
+        "count": 1,
+        "function": "Compound.write",
+        "expresses": [
+          "The loop stops after the first term, so a result ordered by two columns is",
+          "ordered by one. Rows that tie on the first key then come back in whatever",
+          "order the server produced them, which is a difference no error reports."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestOrderMutationPrecondition/P5-4"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrderMutationPrecondition$/^P5-4$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_orderingTermsAreOutputNamesWithDirections"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_orderingTermsAreOutputNamesWithDirections$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionOrder_sortsBySeveralColumns"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionOrder_sortsBySeveralColumns$"
+        ]
+      },
+      "note": [
+        "The tie-breaking half is what a server has to settle, and it is settled in",
+        "internal/gendemo: the fixture there has three ties on the first key, so an",
+        "ordering that dropped the second would be visible in the rows rather than",
+        "only in the text."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_orderingTermsAreOutputNamesWithDirections"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionOrder_sortsBySeveralColumns"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P5-6",
+      "batch": "P5",
+      "name": "The compound's clauses are written in the wrong order",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "orderclasses/P5-6/anchor.txt",
+        "replacement": "orderclasses/P5-6/replacement.txt",
+        "count": 1,
+        "function": "Compound.write",
+        "expresses": [
+          "OFFSET is written before LIMIT. PostgreSQL's grammar fixes the order of a",
+          "compound's trailing clauses — ORDER BY, then LIMIT, then OFFSET — and any",
+          "other arrangement is a syntax error rather than a different meaning."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestOrderMutationPrecondition/P5-5"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrderMutationPrecondition$/^P5-5$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_compoundClausesFollowTheLastBranch"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_compoundClausesFollowTheLastBranch$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionOrder_landsAfterTheLastBranchAndBeforeTheLimit"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionOrder_landsAfterTheLastBranchAndBeforeTheLimit$"
+        ]
+      },
+      "note": [
+        "The clause order was already the compiler's rule and already tested there.",
+        "What ordering adds is a third clause in the sequence and a public route to",
+        "it, so the rule is proven again from the API a caller uses."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 1,
+        "killer_passed": 1,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_compoundClausesFollowTheLastBranch"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionOrder_landsAfterTheLastBranchAndBeforeTheLimit"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P5-7",
+      "batch": "P5",
+      "name": "An ordered branch loses the parentheses that keep its ordering its own",
+      "mutation": {
+        "file": "internal/expr/compound.go",
+        "anchor": "orderclasses/P5-7/anchor.txt",
+        "replacement": "orderclasses/P5-7/replacement.txt",
+        "count": 1,
+        "function": "needsParens",
+        "expresses": [
+          "A nested compound is written bare, so the ordering and limit it carries",
+          "bind to the enclosing operation instead of to itself. The result is valid",
+          "SQL that orders and limits the wrong thing — which is exactly why a branch",
+          "carrying its own clauses is parenthesised."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestOrderMutationPrecondition/P5-6"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrderMutationPrecondition$/^P5-6$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestCompound_nestedCompoundIsParenthesised"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "./internal/expr",
+          "-run",
+          "^TestCompound_nestedCompoundIsParenthesised$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionOrder_anOrderedUnionIsStillEverythingElse"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionOrder_anOrderedUnionIsStillEverythingElse$"
+        ]
+      },
+      "note": [
+        "The same site as P3-6 and P4-5, with a phase five killer. Ordering is the",
+        "case that makes the rule matter most: before this phase a nested compound",
+        "could only carry a limit, and now it can carry the clause the parentheses",
+        "were written for."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 6,
+        "killer_passed": 6,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "internal/expr/compound.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestCompound_nestedCompoundIsParenthesised"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionOrder_anOrderedUnionIsStillEverythingElse",
+          "TestUnionOrder_anOrderedUnionIsStillEverythingElse/a_branch_of_another_union"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    },
+    {
+      "id": "P5-9",
+      "batch": "P5",
+      "name": "A shape stops refusing a name it carries twice",
+      "mutation": {
+        "file": "resultshape.go",
+        "anchor": "orderclasses/P5-9/anchor.txt",
+        "replacement": "orderclasses/P5-9/replacement.txt",
+        "count": 1,
+        "function": "uniqueOutputNames",
+        "expresses": [
+          "The rule that a shape's names identify its columns stops firing, so a result",
+          "carrying one name twice becomes describable and every consumer of the name",
+          "list inherits the ambiguity instead of the refusal — an ordering term with",
+          "two meanings, a derived table whose column cannot be addressed, a CTE the",
+          "same.",
+          "",
+          "This is the class P5-8 became. The rule used to live at the consumers and one",
+          "of four had not asked; moving it to the shape made the old class not",
+          "expressible and put a new one here, at the function that now owns it."
+        ]
+      },
+      "precondition": {
+        "expect": [
+          "TestOrderMutationPrecondition/P5-8"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrderMutationPrecondition$/^P5-8$"
+        ]
+      },
+      "semantic": {
+        "expect": [
+          "TestOrder_aShapeCannotNameOneColumnTwice"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestOrder_aShapeCannotNameOneColumnTwice$"
+        ]
+      },
+      "killer": {
+        "expect": [
+          "TestUnionOrder_aResultCannotNameOneColumnTwice"
+        ],
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          ".",
+          "-run",
+          "^TestUnionOrder_aResultCannotNameOneColumnTwice$"
+        ]
+      },
+      "note": [
+        "The killer is the whole inherited set: ordered, a derived table, a CTE body, a",
+        "value subquery and a branch of another union, refused together because none of",
+        "them asks. A killer naming one consumer would prove that consumer still has a",
+        "check, which is the arrangement this rule replaced."
+      ],
+      "evidence": {
+        "fixture_precondition": true,
+        "precondition_ran": 2,
+        "precondition_passed": 2,
+        "precondition_skipped": 0,
+        "killer_smoke": true,
+        "killer_ran": 6,
+        "killer_passed": 6,
+        "killer_skipped": 0,
+        "semantic_ran": 1,
+        "semantic_passed": 1,
+        "semantic_skipped": 0,
+        "source_precondition": true,
+        "mutation_sites": [
+          "resultshape.go"
+        ],
+        "source_changed": true,
+        "semantic_expression": true,
+        "semantic_failures_under_mutant": [
+          "TestOrder_aShapeCannotNameOneColumnTwice"
+        ],
+        "killer_reachability": true,
+        "killer_failures_under_mutant": [
+          "TestUnionOrder_aResultCannotNameOneColumnTwice"
+        ],
+        "restore_clean": true
+      },
+      "result": "CAUGHT"
+    }
+  ]
+}

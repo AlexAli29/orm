@@ -1,0 +1,1 @@
+rows, err := conn.Query(ctx, typesQuery, searchPath, readableRelkinds)

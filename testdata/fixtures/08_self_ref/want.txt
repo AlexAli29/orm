@@ -1,0 +1,16 @@
+domain/entities.go:19:2: error: E010: domain.Employee.Deputy is orm.One but public.employees(manager_id) is not unique
+    Go:          domain.Employee.Deputy
+    PostgreSQL:  public.employees.manager_id
+    relation:    Deputy
+    constraint:  employees_manager_id_fkey
+    reason:      nothing stops two rows from referencing the same one, so a to-one relation would silently pick whichever came back first
+    fix:         add a total unique constraint on public.employees(manager_id), or declare the field as orm.Many[Employee]
+
+domain/entities.go:29:2: error: E009: domain.Node.Parent is ambiguous: nodes_origin_fkey, nodes_parent_fkey
+    Go:          domain.Node.Parent
+    PostgreSQL:  public.nodes
+    relation:    Parent
+    reason:      the table has more than one foreign key to itself
+    fix:         pin the constraint with orm:"fk:nodes_origin_fkey", and add side:local or side:remote if the direction is also ambiguous
+
+2 findings: 2 errors, 0 warnings

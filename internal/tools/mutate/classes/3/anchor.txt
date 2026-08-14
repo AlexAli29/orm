@@ -1,0 +1,2 @@
+	*h.indexes = slices.Delete(*h.indexes, idx, idx+1)
+	return nil

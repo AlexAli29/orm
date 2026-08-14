@@ -1,0 +1,14 @@
+version: 1
+
+schema:
+  mode: managed
+  dsn: ${HEXAGONAL_EXAMPLE_DSN}
+  search_path:
+    - public
+
+migrations:
+  dir: migrations
+
+packages:
+  - path: ./adapter/ormstore
+    output: same

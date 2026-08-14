@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 2,
+    "errors": 2,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E007",
+      "severity": "error",
+      "tier": "enum",
+      "message": "the labels of public.color and the constants of Color differ",
+      "reason": "Color has no constant for \"green\"; public.color has no label for ColorBlue (\"blue\")",
+      "fix": "add the missing constants, or change the PostgreSQL enum so both sides agree",
+      "entity": "domain.Item",
+      "field": "Color",
+      "go_type": "Color",
+      "table": "public.items",
+      "column": "color",
+      "pg_type": "public.color",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 27,
+        "column": 2
+      }
+    },
+    {
+      "code": "E006",
+      "severity": "error",
+      "tier": "column",
+      "message": "Shade is string but public.items.shade is the enum public.color",
+      "reason": "an enum column maps to a named Go string type whose constants are its labels, so that the two can be reconciled",
+      "fix": "declare a named string type with one constant per label (red, green)",
+      "entity": "domain.Item",
+      "field": "Shade",
+      "go_type": "string",
+      "table": "public.items",
+      "column": "shade",
+      "pg_type": "public.color",
+      "position": {
+        "file": "domain/entities.go",
+        "line": 29,
+        "column": 2
+      }
+    }
+  ]
+}

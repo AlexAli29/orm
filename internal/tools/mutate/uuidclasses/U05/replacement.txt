@@ -1,0 +1,3 @@
+	if resolved := pt.Resolve(); resolved != pt && false {
+		keys = append(keys, resolved.Key())
+	}

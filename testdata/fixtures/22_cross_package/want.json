@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "summary": {
+    "findings": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "code": "E024",
+      "severity": "error",
+      "tier": "relation",
+      "message": "sales.Order.Product targets catalog.Product, which is in another package",
+      "reason": "a relation is loaded through the target's generated descriptors, and those are generated into the target's own package where this one cannot reach them",
+      "fix": "declare sales.Order and catalog.Product in one package, or drop the relation and read the foreign key column directly",
+      "entity": "sales.Order",
+      "field": "Product",
+      "go_type": "orm.One[catalog.Product]",
+      "relation": "Product",
+      "position": {
+        "file": "sales/entities.go",
+        "line": 23,
+        "column": 2
+      }
+    }
+  ]
+}

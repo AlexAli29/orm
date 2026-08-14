@@ -1,0 +1,4 @@
+	nullable := s.nullableSources()
+	if len(nullable) == 0 {
+		return nil
+	}

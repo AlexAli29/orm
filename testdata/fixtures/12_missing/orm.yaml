@@ -1,0 +1,10 @@
+version: 1
+
+schema:
+  dsn: ${ORM_FIXTURE_DSN}
+  search_path:
+    - public
+
+packages:
+  - path: ./domain
+    output: same

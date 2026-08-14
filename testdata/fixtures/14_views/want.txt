@@ -1,0 +1,7 @@
+domain/entities.go:10:1: warning: W031: public.active_users exists, and there is no record of this project having applied its definition
+    Go:          domain.ActiveUser
+    PostgreSQL:  public.active_users
+    reason:      definition drift is detected by comparing what PostgreSQL made of the definition when a migration applied it against what it says now. Without the first of those there is nothing to compare, so the body of this relation is unverified — it may be the declared one, and nothing here can tell
+    fix:         apply public.active_users through a migration so its definition is recorded. Until then its body is not checked
+
+1 finding: 0 errors, 1 warning

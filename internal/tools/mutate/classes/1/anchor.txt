@@ -1,0 +1,2 @@
+	m.Indexes = nil
+	s.MaterializedViews = append(s.MaterializedViews, m)

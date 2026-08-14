@@ -1,0 +1,28 @@
+version: 1
+
+schema:
+  dsn: ${ORM_FIXTURE_DSN}
+  search_path:
+    - public
+
+packages:
+  - path: ./domain
+    output: same
+
+# numeric and uuid map only through configuration. The types below live in the
+# fixture itself so that the corpus does not drag third-party dependencies into
+# the module.
+types:
+  numeric:
+    go: github.com/AlexAli29/orm/testdata/fixtures/16_overrides/domain.Decimal
+    codec: decimal
+  uuid:
+    go: github.com/AlexAli29/orm/testdata/fixtures/16_overrides/domain.UUID
+    codec: uuid
+  # A key that is not a PostgreSQL type name, selected per field with type:.
+  # Money is a struct, so it maps to a text column only because the tag says
+  # which configured mapping applies; payments.fee_untagged shows what happens
+  # without it.
+  money_text:
+    go: github.com/AlexAli29/orm/testdata/fixtures/16_overrides/domain.Money
+    codec: money

@@ -1,0 +1,3 @@
+	if resolved.Kind == model.PGArray {
+		return "[]" + goDescFor(resolved.Elem)
+	}

@@ -1,0 +1,13 @@
+domain/entities.go:23:2: error: E018: domain.Item.Alt and domain.Item.Label both map to public.items.label
+    Go:          domain.Item.Alt string
+    PostgreSQL:  public.items.label text
+    reason:      two fields over one column disagree on every write, and reading fills both with the same value
+    fix:         point Alt at another column with orm:"column:<name>", or exclude it with orm:"-"
+
+domain/entities.go:5:1: error: E017: domain.User and domain.Account both map to public.users
+    Go:          domain.User
+    PostgreSQL:  public.users
+    reason:      one table has one identity, one set of writable columns and one set of relations; two entities over it would disagree about all three
+    fix:         map domain.User to its own table, or remove one of the two entities
+
+2 findings: 2 errors, 0 warnings

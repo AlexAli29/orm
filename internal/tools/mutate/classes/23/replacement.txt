@@ -1,0 +1,4 @@
+			if n == 0 {
+				u.Expression = len(indkey) == 1
+				continue
+			}
