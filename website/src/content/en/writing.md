@@ -55,7 +55,7 @@ Set from an expression rather than a value:
 
 ```go
 db.Orders.Update(ctx).
-    SetExpr(Orders.Total, orm.Add(Orders.Net, Orders.Tax)).
+    SetExpr(Orders.Total, Orders.Net.AddCol(Orders.Tax)).
     Where(Orders.ID.Eq(id))
 ```
 

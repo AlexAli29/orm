@@ -99,14 +99,27 @@ orm.Not(a)
 
 They nest, and the compiler keeps them on one entity: an `orm.And` mixing a `Predicate[User]` and a `Predicate[Order]` does not compile. That is not pedantry — such a predicate would produce SQL naming a table the statement never introduced.
 
-## Expressions as values
+## Comparing two columns
 
-Comparing two columns, or a column to an expression:
+The column-to-column comparisons are free functions rather than methods, and
+they produce a `Predicate[Composed]` — so they belong in a composed query rather
+than in an entity `Where`:
 
 ```go
-Orders.Total.GtCol(Orders.Paid)
-Orders.Total.EqOf(orm.Add(Orders.Net, Orders.Tax))
+orm.Compose(pool, shape).
+    From(Orders.Source()).
+    Where(orm.Gt(Orders.Total, Orders.Paid))
 ```
+
+`Eq`, `Ne`, `Gt`, `Gte`, `Lt` and `Lte` all take two typed values, and both sides
+must carry the same value type. The right-hand side can be an expression:
+
+```go
+orm.Eq(Orders.Total, Orders.Net.AddCol(Orders.Tax))
+```
+
+Arithmetic on a column is a method — `Add`, `Sub`, `Mul`, `Div` against a value,
+and `AddCol` or `SubCol` against another column of the same entity.
 
 ## Raw fragments
 

@@ -52,6 +52,8 @@ export const nav: NavSection[] = [
       { slug: "predicates", title: { en: "Predicates", ru: "Предикаты" } },
       { slug: "relations", title: { en: "Relations", ru: "Связи" } },
       { slug: "projections", title: { en: "Projections", ru: "Проекции" } },
+      { slug: "expressions", title: { en: "Expressions", ru: "Выражения" } },
+      { slug: "windows", title: { en: "Window functions", ru: "Оконные функции" } },
       { slug: "composition", title: { en: "Composition", ru: "Композиция" } },
       { slug: "union-all", title: { en: "UNION ALL", ru: "UNION ALL" } },
       { slug: "writing", title: { en: "Writing data", ru: "Запись данных" } },

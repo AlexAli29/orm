@@ -62,14 +62,14 @@ islands := orm.Sub("islands", orm.Rows(
 anchor := orm.Rows(
     orm.Named("id", orm.Of(Employees.ID)),
     orm.Named("manager_id", orm.Opt(Employees.ManagerID)),
-    orm.Named("depth", orm.Lit(0)),
+    orm.Named("depth", orm.Val(0)),
 ).From(Employees.Source()).Where(orm.Cond(Employees.ManagerID.IsNull()))
 
 tree := orm.RecursiveCTE("tree", anchor, func(self *orm.Source) orm.Term {
     return orm.Rows(
         orm.Named("id", orm.Of(Employees.ID)),
         orm.Named("manager_id", orm.Opt(Employees.ManagerID)),
-        orm.Named("depth", orm.Add(orm.Ref(self, depth), orm.Lit(1))),
+        orm.Named("depth", orm.Ref(self, depth).Add(1)),
     ).From(Employees.Source()).
         Join(self, orm.Eq(Employees.ManagerID, orm.Ref(self, id)))
 })
@@ -84,7 +84,7 @@ tree := orm.RecursiveCTE("tree", anchor, func(self *orm.Source) orm.Term {
 ```go
 last := orm.Scalar[User, time.Time](
     db.Orders.Query().
-        Where(Orders.UserID.EqCol(Users.ID)).
+        Where(orm.Eq(Orders.UserID, Users.ID)).
         OrderBy(Orders.Placed.Desc()).
         Limit(1),
 )
@@ -102,7 +102,7 @@ var shape = orm.Project2(
 ```go
 // NOT EXISTS — обычно любимый вариант планировщика
 db.Users.Query().Where(orm.NotExists(
-    db.Orders.Query().Where(Orders.UserID.EqCol(Users.ID)),
+    db.Orders.Query().Where(orm.Eq(Orders.UserID, Users.ID)),
 ))
 
 // LEFT JOIN ... IS NULL, когда нужны ещё и колонки правой стороны
@@ -121,7 +121,7 @@ recent := orm.Sub("recent", orm.Rows(
     orm.Named("id", orm.Of(Orders.ID)),
     orm.Named("placed", orm.Of(Orders.Placed)),
 ).From(Orders.Source()).
-    Where(orm.Cond(Orders.UserID.EqCol(Users.ID))).
+    Where(orm.Cond(orm.Eq(Orders.UserID, Users.ID))).
     OrderBy(orm.Of(Orders.Placed).Desc()).
     Limit(2))
 

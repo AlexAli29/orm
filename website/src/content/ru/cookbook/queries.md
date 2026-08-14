@@ -167,7 +167,7 @@ db.Users.Insert(ctx, user,
 
 ```go
 db.Counters.Update(ctx).
-    SetExpr(Counters.Hits, orm.Add(Counters.Hits, 1)).
+    SetExpr(Counters.Hits, Counters.Hits.Add(1)).
     Where(Counters.Key.Eq(key)).
     Exec(ctx)
 ```
