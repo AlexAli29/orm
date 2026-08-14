@@ -32,6 +32,84 @@ UserOrders.UserID // NullOrdCol[UserOrder, int64], not OrdCol
 
 That is honest rather than conservative: `SELECT ... FROM a LEFT JOIN b` can produce NULL in a column whose base is `NOT NULL`, and the view does not record which.
 
+## Reading from one
+
+A `ViewRepo` offers `Query` and `QueryFrom` and nothing else. It is the same
+query builder a table gets — the same predicates, ordering, paging, projections
+and composition:
+
+```go
+rows, err := db.MonthlyRevenues.Query().
+    Where(MonthlyRevenues.Plan.Eq("pro")).
+    OrderBy(MonthlyRevenues.Month.Desc()).
+    Limit(12).
+    All(ctx)
+```
+
+What it does **not** offer is writes. There is no `Insert`, `Update` or `Delete`
+on the repo, because PostgreSQL has none for a view without a rule or a trigger —
+so there is nothing that could be generated even in principle.
+
+### Nullable columns change how predicates read
+
+Every view column is a nullable descriptor, so `IsNull` exists on all of them and
+the value type is the plain one:
+
+```go
+// The comparison takes a plain string; the column is nullable, not the argument.
+db.MonthlyRevenues.Query().Where(MonthlyRevenues.Plan.Eq("pro"))
+
+// And this is available on every column, which it would not be on a table.
+db.MonthlyRevenues.Query().Where(MonthlyRevenues.Cents.IsNull())
+```
+
+If that is noise on a view whose columns are genuinely never NULL, the answer is
+to scan into pointers or to project the columns you want with a shape of your
+own — not to declare them non-nullable, which the ORM cannot prove.
+
+### A materialized view reads a snapshot
+
+```go
+rows, err := db.SearchRows.Query().
+    Where(SearchRows.Name.ILike("%lamp%")).
+    Limit(20).
+    All(ctx)
+```
+
+Identical to querying a table, and that is the point of one: the work happened at
+refresh time. The rows are as old as the last successful refresh, which is the
+trade you accepted when you chose a materialized view over a plain one.
+
+### Joining a view to a table
+
+A view is a source like any other, so it composes:
+
+```go
+shape := orm.Project2(
+    orm.Opt(MonthlyRevenues.Cents),
+    orm.Of(Plans.Name),
+    func(cents *int64, name string) Row { return Row{cents, name} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Plans.Source()).
+    LeftJoin(MonthlyRevenues.Source(), orm.Eq(MonthlyRevenues.Plan, Plans.Code)).
+    OrderBy(orm.Of(Plans.Name).Asc()).
+    All(ctx)
+```
+
+### Two occurrences of one view
+
+```go
+thisYear := MonthlyRevenues.As("this_year")
+
+orm.Compose(pool, shape).
+    From(thisYear.Source()).
+    Join(MonthlyRevenues.Source(), orm.Eq(MonthlyRevenues.Plan, thisYear.Plan))
+```
+
+`QueryFrom` is the entity-query equivalent, taking the source you aliased.
+
 ## Materialized views
 
 ```go

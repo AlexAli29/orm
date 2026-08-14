@@ -32,6 +32,86 @@ UserOrders.UserID // NullOrdCol[UserOrder, int64], а не OrdCol
 
 Это честно, а не осторожно: `SELECT ... FROM a LEFT JOIN b` может дать NULL в колонке, база которой `NOT NULL`, а представление не хранит, какая именно.
 
+## Как из него читать
+
+`ViewRepo` даёт `Query` и `QueryFrom` — и больше ничего. Это тот же строитель
+запросов, что и у таблицы: те же предикаты, сортировка, страницы, проекции и
+композиция:
+
+```go
+rows, err := db.MonthlyRevenues.Query().
+    Where(MonthlyRevenues.Plan.Eq("pro")).
+    OrderBy(MonthlyRevenues.Month.Desc()).
+    Limit(12).
+    All(ctx)
+```
+
+Чего он **не** даёт — записи. У репозитория нет ни `Insert`, ни `Update`, ни
+`Delete`, потому что их нет и у PostgreSQL для представления без правила или
+триггера, — значит, генерировать тут нечего даже в принципе.
+
+### Nullable-колонки меняют чтение предикатов
+
+Все колонки представления — nullable-дескрипторы, поэтому `IsNull` есть у каждой,
+а тип значения обычный:
+
+```go
+// Сравнение принимает обычную строку: nullable колонка, а не аргумент.
+db.MonthlyRevenues.Query().Where(MonthlyRevenues.Plan.Eq("pro"))
+
+// И это доступно у каждой колонки, чего не было бы у таблицы.
+db.MonthlyRevenues.Query().Where(MonthlyRevenues.Cents.IsNull())
+```
+
+Если для представления, где колонки заведомо никогда не NULL, это лишний шум, —
+решение в том, чтобы сканировать в указатели или спроецировать нужные колонки
+своей формой, а не объявлять их не-nullable: доказать это библиотека не может.
+
+### Матпредставление отдаёт снимок
+
+```go
+rows, err := db.SearchRows.Query().
+    Where(SearchRows.Name.ILike("%lamp%")).
+    Limit(20).
+    All(ctx)
+```
+
+Ровно как запрос к таблице — в этом и смысл: работа была проделана во время
+обновления. Строки настолько же старые, насколько давним было последнее удачное
+обновление; это и есть размен, на который вы пошли, выбрав материализованное
+представление вместо обычного.
+
+### Джойн представления с таблицей
+
+Представление — такой же источник, как любой другой, поэтому оно составляется:
+
+```go
+shape := orm.Project2(
+    orm.Opt(MonthlyRevenues.Cents),
+    orm.Of(Plans.Name),
+    func(cents *int64, name string) Row { return Row{cents, name} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Plans.Source()).
+    LeftJoin(MonthlyRevenues.Source(), orm.Eq(MonthlyRevenues.Plan, Plans.Code)).
+    OrderBy(orm.Of(Plans.Name).Asc()).
+    All(ctx)
+```
+
+### Два вхождения одного представления
+
+```go
+thisYear := MonthlyRevenues.As("this_year")
+
+orm.Compose(pool, shape).
+    From(thisYear.Source()).
+    Join(MonthlyRevenues.Source(), orm.Eq(MonthlyRevenues.Plan, thisYear.Plan))
+```
+
+`QueryFrom` — эквивалент для запроса по сущности, принимающий источник, который
+вы отальясили.
+
 ## Материализованные представления
 
 ```go
