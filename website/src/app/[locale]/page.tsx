@@ -239,6 +239,29 @@ export default async function Landing({
 
       <footer className="border-t border-[var(--rule)] py-10">
         <div className="mx-auto max-w-[100rem] px-4 text-center text-sm text-[var(--fg-faint)] sm:px-6">
+          {/*
+            For coding agents. The index and the whole-docs file are plain text,
+            and the API manifest beside them is the generated list of every
+            exported symbol — which is the thing an agent most needs and is
+            least able to guess.
+          */}
+          <p className="mb-4">
+            {locale === "ru" ? "Для агентов: " : "For agents: "}
+            <a className="underline hover:text-[var(--fg)]" href={`/llms${locale === "ru" ? ".ru" : ""}.txt`}>
+              llms.txt
+            </a>
+            {" · "}
+            <a
+              className="underline hover:text-[var(--fg)]"
+              href={`/llms-full${locale === "ru" ? ".ru" : ""}.txt`}
+            >
+              {locale === "ru" ? "вся документация" : "all docs"}
+            </a>
+            {" · "}
+            <a className="underline hover:text-[var(--fg)]" href="/api/orm.txt">
+              {locale === "ru" ? "манифест API" : "API manifest"}
+            </a>
+          </p>
           <p>
             {locale === "ru"
               ? "Гоферы нарисованы для этого сайта и вдохновлены гофером Go — оригинальный персонаж Рене Френч, лицензия CC BY 3.0."

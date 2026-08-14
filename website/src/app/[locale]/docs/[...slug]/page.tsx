@@ -28,6 +28,9 @@ export async function generateMetadata({
       languages: Object.fromEntries(
         locales.map((l) => [l, `/${l}/docs/${slug.join("/")}/`]),
       ),
+      // The same page as source markdown, for anything that would rather read
+      // the text than the rendered HTML. Written by scripts/build-llms.mjs.
+      types: { "text/markdown": `/${locale}/docs/${slug.join("/")}.md` },
     },
   };
 }

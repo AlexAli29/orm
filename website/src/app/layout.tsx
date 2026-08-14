@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://orm-docs.vercel.app"),
+  metadataBase: new URL(SITE_URL),
   title: { default: "orm — a schema-reconciling PostgreSQL mapper for Go", template: "%s — orm" },
   description:
     "You own your structs. PostgreSQL owns your schema. The generator proves they agree.",

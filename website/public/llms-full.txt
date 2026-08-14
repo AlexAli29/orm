@@ -1,0 +1,5762 @@
+# ORM — complete documentation
+
+> A PostgreSQL-native ORM for Go. You own your structs, PostgreSQL owns your schema, and the generator proves they agree.
+
+Before writing code against this library, read /api/orm.txt. It is generated from the packages and lists every exported symbol. If a name is not in it, it does not exist — no matter how plausible it looks.
+
+https://ormgo.vercel.app/api/orm.txt
+
+
+
+---
+
+# Introduction
+
+> What this ORM is, what it refuses to do, and why the difference matters.
+
+https://ormgo.vercel.app/en/docs/introduction/
+
+## The thesis
+
+> You own your structs. PostgreSQL owns your schema. The generator proves they agree.
+
+Most Go data mappers pick a side. Either the structs are the source of truth and the schema is generated from them, or the schema is the source of truth and the structs are generated from it. Both directions produce code somebody has to keep in step by hand the moment reality diverges.
+
+This one generates neither from the other. You write the entity structs. Migrations own the schema. The `orm` command introspects both, reports every place they disagree, and generates typed metadata **only from a mapping it proved**.
+
+The consequence is the point: a query that compiles is a query the database can answer.
+
+## What that buys
+
+The generated descriptors carry the type parameters, so the compiler enforces what reconciliation proved:
+
+```go
+// A Predicate[User] cannot reach a query over Post.
+db.Orders.Query().Where(Users.Email.Eq("a@example.com")) // does not compile
+
+// A text column has Like. An integer does not.
+Users.Email.ILike("%@example.com") // fine
+Users.Age.ILike("%")               // does not compile
+
+// A NOT NULL column has no IsNull.
+Users.Bio.IsNull()  // fine: bio is nullable
+Users.Email.IsNull() // does not compile
+```
+
+None of that is a naming convention or a lint rule. It falls out of the descriptor's type, which came from the catalog.
+
+## What it refuses to do
+
+A tool is defined as much by what it will not do:
+
+- **No lazy loading.** A relation is loaded because you asked for it. A loop over a slice cannot silently become a query per row.
+- **No dirty tracking, no identity map, no `Save`.** `Insert`, `Update` and `Delete` state intent. Nothing is inferred.
+- **No implicit zero-value handling.** A struct with `Active: false` stores `false`, because the library cannot tell that from a field somebody left alone. Asking for the column default is [`orm.Default`](/en/docs/writing/), which is explicit.
+- **No SQL string building.** Every value a caller passes becomes a bind parameter. `Expr` and `Raw` accept SQL text deliberately; neither accepts values formatted into it.
+- **No `WHERE`-less updates by accident.** An update or delete with no conditions is refused with `ErrMissingWhere` unless `All` says every row was meant.
+
+## Where the guarantees come from
+
+Three layers, each with a different job.
+
+| Layer | Owns | Proves |
+| --- | --- | --- |
+| Migrations | The schema | That the database can be rebuilt from nothing |
+| Reconciliation | The mapping | That every struct field has a column, with a compatible type |
+| Generated code | The descriptors | That a wrong query does not compile |
+
+If reconciliation cannot prove a field, it does not generate a descriptor for it — it reports an error naming the field, the column and the fix. There is no fallback to `any`.
+
+## Supported PostgreSQL
+
+14, 15, 16, 17 and 18. Not "should work on"; the compatibility suite refuses to run against fewer than all five, because a version listed as supported and never run against is a claim nobody should believe.
+
+## Where to go next
+
+- [Installation](/en/docs/installation/) — add the module and the CLI.
+- [Quickstart](/en/docs/quickstart/) — a schema, a struct and a query in a few minutes.
+- [Core concepts](/en/docs/concepts/) — the vocabulary the rest of the docs uses.
+
+## Worked examples
+
+A taste of what the compiler is doing for you, in four unrelated schemas.
+
+```go
+// A shop. Text has Like; the compiler knows because the catalog said text.
+db.Products.Query().Where(Products.Name.ILike("%lamp%"))
+
+// A ledger. The balance check is in the WHERE, so an overdraft is an update
+// that matched nothing rather than a race.
+db.Accounts.Update(ctx).
+    SetExpr(Accounts.Balance, Accounts.Balance.Sub(amount)).
+    Where(Accounts.ID.Eq(id)).
+    Where(Accounts.Balance.Gte(amount)).
+    Exec(ctx)
+
+// A calendar. Overlap is one predicate, not four comparisons to get right.
+db.Bookings.Query().Where(Bookings.During.Overlaps(orm.ClosedOpen(from, to)))
+
+// A fleet. Three levels loaded in three statements, whatever the row count.
+db.Depots.Query().With(Depots.Vehicles.With(Vehicles.Services)).All(ctx)
+```
+
+And four things that do not compile, which is the same claim from the other side:
+
+```go
+Products.PriceCents.ILike("%")          // an integer has no ILike
+Products.Name.IsNull()                  // name is NOT NULL
+db.Accounts.Query().Where(Products.Name.Eq("x"))  // wrong entity
+orm.UnionAll[Row](byEmail, byAge)       // branches disagree on shape
+```
+
+
+---
+
+# Installation
+
+> The module, the CLI and the configuration file.
+
+https://ormgo.vercel.app/en/docs/installation/
+
+## The module
+
+```bash
+go get github.com/AlexAli29/orm
+```
+
+The runtime depends only on the standard library and `github.com/jackc/pgx/v5`. That boundary is enforced by a test in the suite, so it cannot rot.
+
+## The CLI
+
+The generator and the migration planner are one binary:
+
+```bash
+go install github.com/AlexAli29/orm/cmd/orm@latest
+```
+
+Or run it without installing, which is what most projects put in their `Makefile`:
+
+```bash
+go run github.com/AlexAli29/orm/cmd/orm generate
+```
+
+Pin it in `tools.go` if you want the version tracked with everything else.
+
+## Optional adapters
+
+Each is a module of its own, so a project that does not use one never compiles it:
+
+```bash
+go get github.com/AlexAli29/orm/ormotel          # OpenTelemetry tracing
+go get github.com/AlexAli29/orm/ormtest/postgres # Testcontainers helpers
+```
+
+`ormslog`, `ormhealth` and `ormtest` live in the core module and cost nothing until imported.
+
+## orm.yaml
+
+The configuration file sits at the project root:
+
+```yaml
+version: 1
+
+schema:
+  # Managed: the declarations own the schema and migrations apply it.
+  # Omit `mode` for database-first, where the database is authoritative.
+  mode: managed
+  dsn: ${DATABASE_URL}
+  search_path:
+    - public
+
+migrations:
+  dir: migrations
+
+packages:
+  - path: ./internal/domain
+    output: same
+
+# Types Go has no equivalent for reach it through configuration. The ORM
+# refuses to choose a uuid package for you, because the popular ones are not
+# interchangeable.
+types:
+  uuid:
+    go: github.com/google/uuid.UUID
+    codec: uuid
+```
+
+`${DATABASE_URL}` is expanded from the environment, so the file carries no credentials and can be committed.
+
+## Verifying the install
+
+```bash
+orm check
+```
+
+With an empty project this reports that it found no declarations, which is the correct answer and proves the CLI can reach the database.
+
+## Worked examples
+
+### Database-first, against an existing database
+
+No `mode`, no migrations directory — the database is authoritative and you write
+declarations that describe it:
+
+```yaml
+version: 1
+
+schema:
+  dsn: ${DATABASE_URL}
+  search_path:
+    - public
+    - reporting
+
+packages:
+  - path: ./internal/domain
+    output: same
+```
+
+### Managed, with several bounded contexts
+
+Each context owns its own package, and the generator writes beside each:
+
+```yaml
+version: 1
+
+schema:
+  mode: managed
+  dsn: ${DATABASE_URL}
+  search_path:
+    - public
+    - billing
+    - identity
+
+migrations:
+  dir: migrations
+
+packages:
+  - path: ./internal/billing/domain
+    output: same
+  - path: ./internal/identity/domain
+    output: same
+  - path: ./internal/catalog/domain
+    output: same
+```
+
+Two contexts may own tables with the same name in different schemas; they produce
+separate descriptors and separate migration state.
+
+### Types Go does not have
+
+```yaml
+types:
+  uuid:
+    go: github.com/google/uuid.UUID
+    codec: uuid
+  numeric:
+    go: github.com/shopspring/decimal.Decimal
+    codec: decimal
+```
+
+These are the two the ORM refuses to choose for you, because the popular packages
+are not interchangeable and a wrong `numeric` silently corrupts money.
+
+### A Makefile that keeps everything in step
+
+```makefile
+generate:
+	go run github.com/AlexAli29/orm/cmd/orm makemigrations
+	go run github.com/AlexAli29/orm/cmd/orm migrate
+	go run github.com/AlexAli29/orm/cmd/orm generate
+
+check:
+	go run github.com/AlexAli29/orm/cmd/orm makemigrations --check
+	go run github.com/AlexAli29/orm/cmd/orm check --generated
+```
+
+
+---
+
+# Quickstart
+
+> From an empty directory to a typed query.
+
+https://ormgo.vercel.app/en/docs/quickstart/
+
+This walks the managed path, where the declarations own the schema. For database-first — an existing database you point the generator at — see the note at the end.
+
+## 1. Declare an entity
+
+```go
+// internal/domain/entities.go
+package domain
+
+import "time"
+
+//orm:table public.users
+type User struct {
+    ID        int64     `orm:"pk,identity"`
+    Email     string    `orm:"unique"`
+    Bio       *string
+    Active    bool
+    CreatedAt time.Time
+}
+```
+
+A pointer means the column is nullable. `orm:"pk"` names the primary key; `identity` says PostgreSQL generates it.
+
+## 2. Plan and apply the migration
+
+```bash
+orm makemigrations
+orm migrate
+```
+
+`makemigrations` diffs the declarations against the schema the existing migrations describe and writes an artifact. `migrate` applies it in a transaction and records it.
+
+Look at the plan before applying it:
+
+```bash
+orm makemigrations --dry-run --sql
+```
+
+## 3. Generate
+
+```bash
+orm generate
+```
+
+This introspects the database, reconciles it against the declarations, and writes the descriptors beside your entities. Nothing is generated for a field it could not prove.
+
+## 4. Query
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "os"
+
+    "github.com/jackc/pgx/v5/pgxpool"
+
+    "example.com/app/internal/domain"
+)
+
+func main() {
+    ctx := context.Background()
+    pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer pool.Close()
+
+    db := domain.New(pool)
+
+    users, err := db.Users.Query().
+        Where(domain.Users.Active.Eq(true)).
+        OrderBy(domain.Users.CreatedAt.Desc()).
+        Limit(20).
+        All(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    log.Printf("%d users", len(users))
+}
+```
+
+## 5. Keep it honest in CI
+
+Two commands belong in every pipeline:
+
+```bash
+orm makemigrations --check   # a declaration with no migration fails the build
+orm check --generated        # the committed generated code is current
+```
+
+## Database-first instead
+
+Omit `mode: managed` and point `dsn` at the existing database. Then you write declarations that describe what is already there, and `orm check` tells you where they disagree. No migrations are generated; the database is authoritative.
+
+## Worked examples
+
+### The same five steps, in a different shape
+
+A subscription service rather than a user table, to show the steps are the shape
+rather than the schema.
+
+```go
+// internal/domain/entities.go
+package domain
+
+import "time"
+
+//orm:table public.plans
+//orm:index plans_code_key (Code) unique
+type Plan struct {
+    ID    int64  `orm:"pk,identity"`
+    Code  string
+    Cents int32
+}
+
+//orm:table public.subscriptions
+//orm:index subs_customer_idx (CustomerID, StartedAt)
+type Subscription struct {
+    ID         int64      `orm:"pk,identity"`
+    CustomerID int64
+    PlanID     int64
+    StartedAt  time.Time  `orm:"default:now()"`
+    CancelledAt *time.Time
+
+    Plan orm.One[Plan] `orm:"fk:plan_id"`
+}
+```
+
+```bash
+orm makemigrations && orm migrate && orm generate
+```
+
+```go
+// Active subscriptions with their plan, newest first.
+subs, err := db.Subscriptions.Query().
+    Where(Subscriptions.CancelledAt.IsNull()).
+    With(Subscriptions.Plan).
+    OrderBy(Subscriptions.StartedAt.Desc()).
+    Limit(50).
+    All(ctx)
+
+// Revenue by plan code, one statement.
+var revenue = orm.Project2(
+    Plans.Code, orm.Count[Subscription](),
+    func(code string, n int64) Row { return Row{code, n} },
+)
+```
+
+`CancelledAt` is a pointer, so `IsNull` exists on it and reads as "not
+cancelled". On `StartedAt`, which is `NOT NULL`, that method is not there to be
+misused.
+
+
+---
+
+# Core concepts
+
+> The vocabulary the rest of the documentation uses.
+
+https://ormgo.vercel.app/en/docs/concepts/
+
+## Entity
+
+A Go struct marked with `//orm:table`. You write it; nothing generates it.
+
+## Descriptor
+
+The generated, typed handle for a column: `Users.Email`, `Orders.Placed`. Its Go type encodes what the catalog said — the value type, whether it is nullable, and which comparisons PostgreSQL defines for it.
+
+```go
+Users.Email   // orm.TextCol[User]              — has Like, ILike
+Users.ID      // orm.OrdCol[User, int64]        — has Gt, Between, Asc
+Users.Bio     // orm.NullTextCol[User]          — has IsNull
+Users.Tags    // orm.Col[User, []string]        — equality only
+```
+
+Descriptors are read-only and safe to share. Anything that looks like mutation — aliasing a table, configuring a relation — returns a copy.
+
+## Capability
+
+What a column type can do in SQL, not what Go can do with it. `uuid` is ordered because PostgreSQL orders it; `jsonb` is not, because comparing two jsonb documents answers no question anybody asks. This is why the ORM does not key ordering off Go's `cmp.Ordered`.
+
+## Source
+
+One occurrence of a relation in a statement. Aliasing a table produces a second source, and a descriptor built from one source cannot be used against another — which is what makes a self-join safe.
+
+## Repo
+
+`Repo[E]` binds generated metadata to an executor: a `*pgxpool.Pool`, a `*pgx.Conn` or a `pgx.Tx`. Generated code gives you a `DB` struct holding one per entity.
+
+## Query, SelectQuery, ComposedQuery
+
+Three builders, three jobs:
+
+- `Query[E]` reads whole entities from one table.
+- `SelectQuery[E, R]` reads a projection — a chosen result shape — from one table.
+- `ComposedQuery[R]` reads a projection from sources you composed yourself: joins, CTEs, derived tables.
+
+All three are mutable, single-use and not safe for concurrent use. `Clone` branches one.
+
+## Projection
+
+Two things bundled: **which expressions to select**, and **a function turning
+those values into your result type**. `Project2` takes two expressions, so its
+function takes two parameters, in the same order and with the types those
+columns have.
+
+```go
+type Summary struct {
+    ID    int64
+    Email string
+}
+
+var Summaries = orm.Project2(
+    Users.ID,     // 1st expression → 1st parameter, int64 because id is bigint
+    Users.Email,  // 2nd expression → 2nd parameter, string because email is text
+    func(id int64, email string) Summary { return Summary{ID: id, Email: email} },
+)
+
+rows, _ := orm.Select(db.Users, Summaries).All(ctx)
+// []Summary — SELECT id, email FROM users
+```
+
+It is a value rather than a query: build one and use it from many queries.
+[Projections](/en/docs/projections/) has the whole of it.
+
+## Nullability, and where it comes from
+
+Two things make a value nullable, and they are different:
+
+1. **The column** is nullable. `Users.Bio` is `NullTextCol`.
+2. **The query** makes it nullable. A `NOT NULL` column read through a `LEFT JOIN` can be NULL for a row that matched nothing.
+
+The second is source-induced nullability. It is why `orm.Opt` exists, and why a select list that reads an outer-joined source with `orm.Of` is refused.
+
+## Error handling
+
+Sentinels are wrapped rather than replaced, so `errors.Is` works through the context each layer adds, and PostgreSQL's own `*pgconn.PgError` stays reachable with `errors.As`. No exported API panics for a bad query, a database error or a failed scan.
+
+## Worked examples
+
+### Reading a descriptor's type
+
+The type is the documentation. When you are unsure what a column can do, the
+declaration says:
+
+```go
+Products.Name      // orm.TextCol[Product]              — Like, ILike
+Products.PriceCents // orm.OrdCol[Product, int32]       — Gt, Between, Asc
+Products.Discount  // orm.NullOrdCol[Product, int32]    — the above, plus IsNull
+Products.Tags      // orm.Col[Product, []string]        — equality only
+Products.Meta      // orm.Col[Product, map[string]any]  — equality only
+```
+
+A method you expected and cannot find is usually the answer to "PostgreSQL does
+not define that for this type".
+
+### One source, or two
+
+```go
+managers := Employees.As("mgr")
+
+orm.Compose(pool, shape).
+    From(Employees.Source()).
+    LeftJoin(managers.Source(), orm.Eq(managers.ID, Employees.ManagerID))
+```
+
+`Employees.ID` and `managers.ID` are the same column of two different
+occurrences, and the compiler will not let one stand for the other. That is what
+makes a self-join safe rather than a naming exercise.
+
+### The three states of a relation
+
+```go
+p, _ := db.Products.Query().Where(Products.ID.Eq(id)).One(ctx)
+reviews, ok := p.Reviews.Get()
+
+switch {
+case !ok:
+    // not loaded — nobody asked for it
+case len(reviews) == 0:
+    // loaded, and there genuinely are none
+default:
+    // loaded, and here they are
+}
+```
+
+The first case is the one other libraries collapse into the second, which is how
+"no reviews" ends up on a page that never asked for reviews.
+
+
+---
+
+# Entities and tags
+
+> The directives and struct tags the generator reads.
+
+https://ormgo.vercel.app/en/docs/entities/
+
+## Directives
+
+A directive is a comment above a type. It says what the type is.
+
+```go
+//orm:table public.users
+type User struct { /* ... */ }
+
+//orm:view public.active_users
+//orm:definition `SELECT id, email FROM users WHERE active`
+//orm:depends-on public.users
+type ActiveUser struct { /* ... */ }
+
+//orm:materialized-view public.user_summaries
+//orm:definition `SELECT user_id, count(*) AS orders FROM user_orders GROUP BY user_id`
+//orm:depends-on public.user_orders
+//orm:index user_summaries_key (UserID) unique
+type UserSummary struct { /* ... */ }
+```
+
+The relation name is schema-qualified. `public` is not assumed, because a project with two schemas would then have two meanings for one name.
+
+## The tag grammar
+
+Everything else is a struct tag under the `orm` key:
+
+| Directive | Means |
+| --- | --- |
+| `pk` | Part of the primary key |
+| `identity` | PostgreSQL generates the value (`identity:always` for `GENERATED ALWAYS`) |
+| `unique` | A single-column unique constraint |
+| `column:name` | The column name, when it differs from the field |
+| `pgtype:uuid` | The PostgreSQL type, when the Go type cannot imply it |
+| `type:name` | A configured type-mapping key |
+| `default:expr` | The column's `DEFAULT` |
+| `generated:expr` | A generated column |
+| `fk:user_id` | The foreign key column backing a relation |
+| `side:...` | Which side of a relation this field is |
+| `-` | Ignore this field entirely |
+
+```go
+//orm:table public.orders
+//orm:index orders_user_idx (UserID)
+type Order struct {
+    ID         uuid.UUID  `orm:"pk,pgtype:uuid"`
+    UserID     uuid.UUID  `orm:"pgtype:uuid"`
+    Label      string     `orm:"column:title"`
+    Total      string     `orm:"pgtype:numeric"`
+    CreatedAt  time.Time  `orm:"default:now()"`
+    Internal   string     `orm:"-"`
+
+    User orm.One[User] `orm:"fk:user_id"`
+}
+```
+
+## Nullability
+
+A pointer is a nullable column. There is nothing else to learn:
+
+```go
+Bio        *string     // bio text
+OptionalID *uuid.UUID  // optional_id uuid
+Tags       []string    // tags text[] NOT NULL
+```
+
+An empty slice and a NULL array are different values, and the ORM keeps them different. If the array column is nullable, use `*[]string`.
+
+## Zero values are values
+
+```go
+db.Users.Insert(ctx, User{Active: false})               // stores FALSE
+db.Users.Insert(ctx, User{}, orm.Default(Users.Active)) // stores the column default
+```
+
+The library cannot tell "false" from "a field somebody left alone", and guessing is how a row ends up with a value nobody chose. Asking for the default is a separate, explicit thing.
+
+## Relations
+
+`One` and `Many` declare relations and record three states: unloaded, loaded and empty, loaded and present.
+
+```go
+type User struct {
+    ID     int64 `orm:"pk,identity"`
+    Orders orm.Many[Order]
+}
+
+type Order struct {
+    ID     int64 `orm:"pk,identity"`
+    UserID int64
+    User   orm.One[User] `orm:"fk:user_id"`
+}
+```
+
+The zero value is unloaded, so a struct literal that omits a relation says "I did not ask for this" rather than "there is nothing there". Reading one is `Get() ([]T, bool)` or `MustGet()`.
+
+## Indexes
+
+Declared on the type, because an index belongs to a relation rather than to a column:
+
+```go
+//orm:index users_email_key (Email) unique
+//orm:index users_active_idx (Active, CreatedAt)
+//orm:index users_lower_email_idx ("lower(email)")
+//orm:index users_tags_gin_idx (Tags) using gin
+//orm:index users_paid_idx (CreatedAt) where "paid_at IS NOT NULL"
+```
+
+Fields are named by their Go names; a quoted string is a SQL expression.
+
+## Worked examples
+
+### A multi-tenant table
+
+Everything a tenant column needs: the tag, the composite key and the index that
+makes lookups scoped rather than filtered.
+
+```go
+//orm:table public.documents
+//orm:index documents_tenant_idx (TenantID, UpdatedAt)
+//orm:index documents_slug_key (TenantID, Slug) unique
+type Document struct {
+    TenantID  int64     `orm:"pk"`
+    ID        int64     `orm:"pk,identity"`
+    Slug      string
+    Title     string
+    Body      *string
+    UpdatedAt time.Time `orm:"default:now()"`
+}
+```
+
+Two `pk` fields are a composite key. The unique index is on the pair, so two
+tenants may use the same slug and one tenant may not.
+
+### A table that names its columns differently
+
+```go
+//orm:table billing.invoice_lines
+type InvoiceLine struct {
+    ID        int64  `orm:"pk,identity"`
+    InvoiceID int64  `orm:"column:inv_id"`
+    Cents     int32  `orm:"column:amount_cents"`
+    Note      string `orm:"-"`   // not a column at all
+}
+```
+
+`column:` is for a schema you did not choose. `-` is for a field that is yours
+alone — a cached value, a formatting helper — and the generator will not look
+for it.
+
+### Generated and defaulted columns
+
+```go
+//orm:table public.people
+type Person struct {
+    ID       int64  `orm:"pk,identity:always"`
+    First    string
+    Last     string
+    Full     string    `orm:"generated:first || ' ' || last"`
+    JoinedAt time.Time `orm:"default:now()"`
+    Ref      uuid.UUID `orm:"pgtype:uuid,default:gen_random_uuid()"`
+}
+```
+
+`identity:always` means PostgreSQL refuses a value you supply, which is stronger
+than the default `identity`.
+
+### Indexes worth declaring
+
+```go
+//orm:index orders_open_idx (PlacedAt) where "shipped_at IS NULL"
+//orm:index orders_lower_ref_idx ("lower(reference)")
+//orm:index orders_tags_gin_idx (Tags) using gin
+```
+
+A partial index over open orders is smaller than one over all of them, and stays
+small as the table grows.
+
+
+---
+
+# Type mapping
+
+> How a PostgreSQL type becomes a Go type, and what happens when Go has no equivalent.
+
+https://ormgo.vercel.app/en/docs/types/
+
+## Built-in scalars
+
+These need no configuration. The Go type on the right is what the generator emits.
+
+| PostgreSQL | Go |
+| --- | --- |
+| `bool` | `bool` |
+| `int2`, `int4`, `int8` | `int16`, `int32`, `int64` |
+| `float4`, `float8` | `float32`, `float64` |
+| `text`, `varchar`, `bpchar`, `citext`, `name` | `string` |
+| `bytea` | `[]byte` |
+| `date`, `timestamp`, `timestamptz` | `time.Time` |
+| `uuid` | *configured* |
+| `numeric` | *configured* |
+| `json`, `jsonb` | `orm.JSON` / `orm.JSONB` |
+| `inet`, `cidr` | `netip.Prefix` / `netip.Addr` |
+| `macaddr` | `net.HardwareAddr` |
+| `interval` | `orm.Interval` |
+| `tsvector`, `tsquery` | `orm.TSVector`, `orm.TSQuery` |
+| `int4range`, `daterange`, … | `orm.Range[T]` |
+| `int4multirange`, … | `orm.Multirange[T]` |
+| `T[]` | `[]T` |
+
+## Types Go does not have
+
+Two of them are refused rather than guessed at, and the refusal is the feature.
+
+### numeric
+
+There is no lossless built-in Go type for an arbitrary-precision decimal, and mapping it to `float64` would silently corrupt money. So it must be configured:
+
+```yaml
+types:
+  numeric:
+    go: github.com/shopspring/decimal.Decimal
+    codec: decimal
+```
+
+### uuid
+
+Go has no `uuid` type, and the popular third-party ones are not interchangeable. The ORM refuses to choose; the project chooses, and the choice is the project's dependency:
+
+```yaml
+types:
+  uuid:
+    go: github.com/google/uuid.UUID
+    codec: uuid
+```
+
+The ORM itself never depends on `google/uuid`. That is checked in CI, because a mandatory uuid dependency is exactly what configured mappings exist to avoid.
+
+## The one asymmetry worth knowing
+
+A configured mapping works in one direction.
+
+| Mode | Tag | Result |
+| --- | --- | --- |
+| Database-first | none | works — `uuid` → `uuid.UUID` |
+| Managed | none | **refused** — no PostgreSQL type for `uuid.UUID` |
+| Managed | `pgtype:uuid` | works |
+
+Database-first starts from a PostgreSQL type and looks the Go one up, so the mapping applies on its own. Managed starts from the Go type and there is no reverse lookup — a configuration mapping two Go types onto one PostgreSQL type would have two answers and no way to choose. So managed mode has to be told:
+
+```go
+ID   uuid.UUID   `orm:"pk,pgtype:uuid"`
+Tags []uuid.UUID `orm:"pgtype:uuid[]"`
+```
+
+## Domains
+
+Domains are supported generically: reconciliation follows a domain to the type it is built on, so a column typed `tenant_uuid` over `uuid` is served by the one configured `uuid` mapping without an entry of its own.
+
+Name it schema-qualified. The unqualified spelling migrates and then reads back qualified, and the two do not compare equal, so an unchanged project reports drift:
+
+```go
+TenantID uuid.UUID `orm:"pgtype:public.tenant_uuid"` // right
+TenantID uuid.UUID `orm:"pgtype:tenant_uuid"`        // reports permanent drift
+```
+
+## Ranges keep their bounds
+
+A pair of endpoints cannot say whether a bound is inclusive, exclusive or unbounded, so `Range[T]` carries the whole model. Which of `daterange`, `tsrange` and `tstzrange` a `Range[time.Time]` column is comes from the catalog rather than being guessed from Go.
+
+```go
+r := orm.ClosedOpen(start, end)
+db.Bookings.Query().Where(Bookings.During.Overlaps(r))
+```
+
+Values PostgreSQL canonicalises — discrete ranges, every multirange — come back as the server holds them.
+
+## Interval is not a Duration
+
+`Interval` keeps months, days and microseconds apart, and refuses to become a `time.Duration` when it holds a calendar component. A month has no fixed length, and the error says so rather than quietly picking 30 days.
+
+```go
+d, err := iv.Duration()
+if errors.Is(err, orm.ErrCalendarInterval) {
+    // months or days are present; the caller decides what they mean
+}
+```
+
+## Unsupported types are refused
+
+A column whose type has no mapping stops generation with a diagnostic naming the column, the type and the fix. It never degrades to `any`, `string` or `[]byte` — a placeholder that scans is worse than a build failure, because it fails later and further away.
+
+## Worked examples
+
+### Money, without float
+
+```go
+//orm:table public.invoices
+type Invoice struct {
+    ID    int64   `orm:"pk,identity"`
+    Cents int64                                  // the simple answer
+    Total decimal.Decimal `orm:"pgtype:numeric"` // the exact one
+}
+```
+
+Integer cents is fine until you need a third decimal place or a rate. `numeric`
+is exact at any scale, and mapping it requires a `types.numeric` entry — the ORM
+will not pick a decimal package for you.
+
+### Addresses and networks
+
+```go
+//orm:table public.sessions
+type Session struct {
+    ID     int64        `orm:"pk,identity"`
+    Client netip.Addr   `orm:"pgtype:inet"`
+    Subnet netip.Prefix `orm:"pgtype:cidr"`
+    Device net.HardwareAddr `orm:"pgtype:macaddr"`
+}
+```
+
+These order and index as addresses rather than as text, so a range of a subnet is
+a range and not a `LIKE`.
+
+### Arrays that mean something
+
+```go
+//orm:table public.articles
+type Article struct {
+    ID      int64      `orm:"pk,identity"`
+    Tags    []string                        // NOT NULL, may be empty
+    Authors *[]int64                        // nullable: no list at all
+}
+```
+
+An empty array and a NULL array are different values and the ORM keeps them
+different. Which you want is a schema decision, and the pointer is how you say it.
+
+### A domain, so the type carries the rule
+
+```go
+// CREATE DOMAIN email AS citext CHECK (VALUE ~ '@');
+type Contact struct {
+    Address string `orm:"pgtype:public.email"`
+}
+```
+
+Reconciliation follows the domain to `citext` and maps it to `string`. Name it
+schema-qualified, or the migrated and introspected names will not compare equal.
+
+
+---
+
+# Ranges and multiranges
+
+> A span of values, with its bounds kept — not two columns pretending to be one.
+
+https://ormgo.vercel.app/en/docs/ranges/
+
+## Why the type exists
+
+A pair of endpoints cannot say whether a bound is inclusive, exclusive or
+unbounded. `[1,10)` and `(1,10]` contain different numbers, and two `int`
+columns called `lo` and `hi` have nowhere to record which you meant.
+
+`Range[T]` carries the whole model: two values and two bound kinds, plus the
+empty range, which is not the same as a range of width zero.
+
+## Building one
+
+```go
+orm.Closed(1, 10)        // [1,10]  both ends included
+orm.ClosedOpen(1, 10)    // [1,10)  the usual one for dates and times
+orm.OpenClosed(1, 10)    // (1,10]
+orm.RangeFrom(t)         // [t,)    no upper bound
+orm.RangeUntil(t)        // (,t)    no lower bound
+orm.UnboundedRange[int]() // (,)
+orm.EmptyRange[int]()    // empty
+```
+
+`NewRange` is the explicit form when the bounds are computed:
+
+```go
+orm.NewRange(lo, orm.BoundInclusive, hi, orm.BoundExclusive)
+```
+
+Reading one back:
+
+```go
+lo, loKind := r.LowerBound()
+hi, hiKind := r.UpperBound()
+if r.IsEmpty() { /* ... */ }
+```
+
+## Declaring a column
+
+```go
+//orm:table public.bookings
+type Booking struct {
+    ID     int64          `orm:"pk,identity"`
+    During orm.Range[time.Time] `orm:"pgtype:tstzrange"`
+    Prices *orm.Range[int32]    `orm:"pgtype:int4range"`
+}
+```
+
+Which range type a `Range[time.Time]` is — `daterange`, `tsrange` or `tstzrange`
+— comes from the catalog rather than being guessed from Go, which is why the tag
+names it.
+
+## Querying
+
+```go
+db.Bookings.Query().Where(Bookings.During.Overlaps(r))         // &&
+db.Bookings.Query().Where(Bookings.During.Contains(t))         // @> a value
+db.Bookings.Query().Where(Bookings.During.ContainsRange(r))    // @> a range
+db.Bookings.Query().Where(Bookings.During.ContainedBy(r))      // <@
+db.Bookings.Query().Where(Bookings.During.Adjacent(r))         // -|-
+db.Bookings.Query().Where(Bookings.During.StrictlyLeftOf(r))   // <<
+db.Bookings.Query().Where(Bookings.During.StrictlyRightOf(r))  // >>
+db.Bookings.Query().Where(Bookings.During.NotLeftOf(r))        // &>
+db.Bookings.Query().Where(Bookings.During.NotRightOf(r))       // &<
+```
+
+`Contains` takes a value, `ContainsRange` takes a range. They are different
+operators in PostgreSQL and different methods here, so the one you meant is the
+one you get.
+
+Comparing against another column of the same entity:
+
+```go
+Bookings.During.OverlapsCol(Bookings.Requested)
+Bookings.During.ContainsCol(Bookings.Requested)
+```
+
+## Reading the bounds in SQL
+
+```go
+Bookings.During.Lower()      // lower(during)     -> *T
+Bookings.During.Upper()      // upper(during)     -> *T
+Bookings.During.LowerInc()   // lower_inc(during) -> bool
+Bookings.During.LowerInf()   // lower_inf(during) -> bool
+Bookings.During.IsEmpty()    // isempty(during)   -> bool
+```
+
+`Lower` and `Upper` are nullable, because an unbounded end has no value.
+
+To filter on emptiness, use the predicate form rather than comparing the value:
+
+```go
+db.Bookings.Query().Where(Bookings.During.IsEmptyIs(true))
+```
+
+## Multiranges
+
+A multirange is an ordered set of non-overlapping ranges — what you get when you
+union two ranges that do not touch.
+
+```go
+//orm:table public.schedules
+type Schedule struct {
+    Free orm.Multirange[time.Time] `orm:"pgtype:tstzmultirange"`
+}
+```
+
+```go
+Schedules.Free.Contains(t)                 // a value
+Schedules.Free.ContainsRange(r)            // one range
+Schedules.Free.ContainsMultirange(m)       // a whole multirange
+Schedules.Free.Overlaps(m)
+Schedules.Free.OverlapsRange(r)
+Schedules.Free.Merge()                     // range_merge -> Range[T]
+Schedules.Free.IsEmpty()
+```
+
+`Merge` collapses a multirange to the single range spanning it — the smallest
+range containing every member, gaps included.
+
+## What PostgreSQL canonicalises
+
+Discrete ranges — `int4range`, `int8range`, `daterange` — come back in canonical
+form, so `[1,10]` arrives as `[1,11)`. Every multirange is canonicalised too.
+That is the server's normalisation, not this package's, and the values you read
+are the values it holds.
+
+## Worked examples
+
+### A meeting room
+
+Double booking is one predicate, not a pair of comparisons you have to get right:
+
+```go
+wanted := orm.ClosedOpen(start, end)
+
+clash, err := db.Bookings.Query().
+    Where(Bookings.RoomID.Eq(roomID)).
+    Where(Bookings.During.Overlaps(wanted)).
+    Exists(ctx)
+```
+
+`ClosedOpen` is the right shape for time: a booking ending at 10:00 and one
+starting at 10:00 do not overlap, and `[start, end)` is what says so.
+
+### A price with a validity window
+
+The price in force on a date, and the rows that have no end yet:
+
+```go
+current, err := db.Tariffs.Query().
+    Where(Tariffs.ProductID.Eq(id)).
+    Where(Tariffs.Valid.Contains(on)).
+    One(ctx)
+
+open, err := db.Tariffs.Query().
+    Where(Tariffs.Valid.Overlaps(orm.RangeFrom(time.Now()))).
+    All(ctx)
+```
+
+### A rota
+
+Where cover ends and the next shift has not started — adjacency and gaps:
+
+```go
+// Shifts that touch without overlapping.
+db.Shifts.Query().Where(Shifts.Hours.Adjacent(other))
+
+// Everything entirely before a cutoff.
+db.Shifts.Query().Where(Shifts.Hours.StrictlyLeftOf(orm.RangeFrom(cutoff)))
+
+// The bounds, read in SQL.
+var span = orm.Project2(
+    Shifts.Hours.Lower(), Shifts.Hours.Upper(),
+    func(from, to *time.Time) Span { return Span{from, to} },
+)
+```
+
+Both bounds are nullable because an open-ended shift has no value there.
+
+### Availability as a multirange
+
+```go
+// Any of the free windows covers the whole appointment.
+db.Calendars.Query().Where(Calendars.Free.ContainsRange(appointment))
+
+// The span from first free minute to last, gaps included.
+var span = orm.Project1(
+    Calendars.Free.Merge(),
+    func(r orm.Range[time.Time]) orm.Range[time.Time] { return r },
+)
+```
+
+
+---
+
+# JSON and JSONB
+
+> Reading into a document, and why every reader comes back nullable.
+
+https://ormgo.vercel.app/en/docs/json/
+
+## The column
+
+A `jsonb` column maps to whatever Go type you declare for it — commonly a map,
+sometimes a struct:
+
+```go
+//orm:table public.users
+type User struct {
+    ID       int64          `orm:"pk,identity"`
+    Settings map[string]any `orm:"pgtype:jsonb"`
+    Profile  *Profile       `orm:"pgtype:jsonb"`
+}
+```
+
+`jsonb` is the one to use. `json` stores the original text including whitespace
+and duplicate keys; `jsonb` stores a parsed structure, which is what indexes and
+containment operators need.
+
+## Everything is a free function
+
+The readers and tests are free functions rather than methods, because either side
+can be a column or an expression. They take an `Optional`, so a non-nullable
+column is lifted with `orm.Opt`:
+
+```go
+meta := orm.Opt(Users.Settings)
+```
+
+They produce `Predicate[Composed]` or an `Expression`, so they belong in a
+composed query.
+
+## Tests
+
+```go
+orm.JSONHasKey(meta, "plan")                    // ?
+orm.JSONHasAnyKeys(meta, "plan", "tier")        // ?|
+orm.JSONHasAllKeys(meta, "plan", "tier")        // ?&
+orm.JSONContains(meta, orm.Val(v))              // @>
+orm.JSONContainedBy(meta, orm.Val(v))           // <@
+orm.JSONPathExists(meta, "$.billing.tier")      // @?
+orm.JSONMatches(meta, "$.age > 18")             // @@
+```
+
+`JSONPathExists` and `JSONMatches` take SQL/JSON path syntax, which is the
+expressive one: `$.items[*].price`, filters, wildcards.
+
+## Readers
+
+```go
+orm.JSONGet(meta, "billing")            // ->   a key,   returns jsonb
+orm.JSONText(meta, "plan")              // ->>  a key,   returns text
+orm.JSONIndex(meta, 0)                  // ->   an index of an array
+orm.JSONIndexText(meta, 0)              // ->>  an index
+orm.JSONPathGet(meta, "billing", "tier")  // #>  a path, returns jsonb
+orm.JSONPathText(meta, "billing", "tier") // #>> a path, returns text
+orm.JSONArrayLength(meta)               // jsonb_array_length
+orm.JSONTypeOf(meta)                    // jsonb_typeof
+```
+
+**Every one of them is nullable, and that is not caution.** `->` over a key that
+is not there is NULL. `->>` over a non-existent path is NULL. `jsonb_typeof` of
+a NULL document is NULL. A document is a shape nobody validated, so a reader
+that promised a non-null result would be lying about the common case.
+
+That is why you cast rather than compare directly:
+
+```go
+age := orm.CastNull(orm.JSONPathText(meta, "profile", "age"), orm.Integer)
+// Expression[*int32, *int32]
+```
+
+## Writers
+
+```go
+orm.JSONSet(Users.Settings, []string{"billing", "tier"}, v, true)
+orm.JSONInsert(Users.Settings, []string{"tags", "0"}, v, false)
+orm.JSONStripNulls(Users.Settings)
+```
+
+`JSONSet`'s last argument is `create_missing` — whether to add the key when the
+path does not exist. `JSONInsert`'s is `insert_after`. Both are booleans in
+PostgreSQL's own signature, and they are passed through rather than renamed,
+because a reader checking the manual should find the same argument.
+
+They return a `Value`, so they belong in an update:
+
+```go
+db.Users.Update(ctx).
+    SetExpr(Users.Settings,
+        orm.JSONSet(Users.Settings, []string{"plan"}, newPlan, true)).
+    Where(Users.ID.Eq(id)).
+    Exec(ctx)
+```
+
+## Indexing
+
+A containment query wants a GIN index:
+
+```go
+//orm:index users_settings_gin_idx (Settings) using gin
+```
+
+`jsonb_path_ops` is smaller and faster for `@>` alone but supports fewer
+operators — declare it as an expression index when you want it.
+
+## Worked examples
+
+### Feature flags on an account
+
+```go
+settings := orm.Opt(Accounts.Settings)
+
+// Accounts that have opted into the beta.
+orm.Compose(pool, shape).From(Accounts.Source()).
+    Where(orm.JSONContains(settings, orm.Val(map[string]any{"beta": true})))
+
+// Accounts where the key was never set at all — a different question.
+orm.Compose(pool, shape).From(Accounts.Source()).
+    Where(orm.Not(orm.JSONHasKey(settings, "beta")))
+```
+
+`Contains` asks about the value; `HasKey` asks whether anyone decided. A flag
+that is absent and a flag that is `false` are different states, and this is how
+you keep them apart.
+
+### An event payload
+
+Reading a nested value out and comparing it as a number:
+
+```go
+payload := orm.Opt(Events.Payload)
+
+amount := orm.CastNull(orm.JSONPathText(payload, "order", "total"), orm.Integer)
+
+var big = orm.Project2(
+    orm.Of(Events.ID), amount,
+    func(id int64, total *int32) Big { return Big{id, total} },
+)
+
+orm.Compose(pool, big).From(Events.Source()).
+    Where(orm.JSONPathExists(payload, "$.order.total")).
+    All(ctx)
+```
+
+The cast is where the type is decided. `->>` gives text whatever the document
+holds, and a comparison against a number has to say so.
+
+### A profile document, edited in place
+
+```go
+db.Profiles.Update(ctx).
+    SetExpr(Profiles.Doc,
+        orm.JSONSet(Profiles.Doc, []string{"contact", "email"}, newEmail, true)).
+    Where(Profiles.ID.Eq(id)).
+    Exec(ctx)
+```
+
+`true` is `create_missing`: add `contact.email` when the path is not there. With
+`false` the update is a no-op on a document that never had it.
+
+### Shape questions
+
+```go
+orm.JSONTypeOf(orm.Opt(Events.Payload))       // "object", "array", "string"…
+orm.JSONArrayLength(orm.Opt(Events.Items))    // *int32, NULL if not an array
+```
+
+
+---
+
+# Dates and intervals
+
+> Truncating, extracting, and an interval type that refuses to lie about months.
+
+https://ormgo.vercel.app/en/docs/datetime/
+
+## Interval is not a Duration
+
+`time.Duration` is a count of nanoseconds. A PostgreSQL `interval` is three
+independent parts — months, days and microseconds — and it keeps them apart
+because they are not convertible:
+
+- a month is 28 to 31 days
+- a day is 23, 24 or 25 hours across a daylight-saving boundary
+
+```go
+iv := orm.IntervalOf(months, days, micros)
+iv := orm.IntervalFromDuration(90 * time.Minute) // no months, no days
+```
+
+Converting back only works when there is nothing calendar-shaped in it:
+
+```go
+d, err := iv.Duration()
+if errors.Is(err, orm.ErrCalendarInterval) {
+    // months or days are present; what they mean depends on when they start,
+    // and the library will not pick 30 days on your behalf
+}
+```
+
+That error is the whole design. A library that silently returned 720 hours for
+one month would be right most of the time and wrong at every month boundary.
+
+## Arithmetic
+
+```go
+orm.AddInterval(Events.At, orm.Val(iv))   // timestamp + interval
+orm.SubInterval(Events.At, orm.Val(iv))
+orm.IntervalPlus(a, b)                    // interval + interval
+orm.IntervalMinus(a, b)
+orm.IntervalTimes(a, 3)                   // interval * n
+```
+
+Each has a `…Null` form for nullable inputs, because arithmetic with NULL is
+NULL.
+
+## Truncating
+
+```go
+orm.DateTrunc(orm.Month, Events.At)   // date_trunc('month', at)
+orm.DateTrunc(orm.Day, Events.At)
+orm.DateTrunc(orm.Hour, Events.At)
+```
+
+The classic use is grouping a time series into buckets:
+
+```go
+bucket := orm.DateTrunc(orm.Day, Events.At)
+
+var perDay = orm.Project2(
+    bucket, orm.Count[Event](),
+    func(day time.Time, n int64) Bucket { return Bucket{day, n} },
+)
+
+orm.Select(db.Events, perDay).
+    Where(Events.At.Gte(since)).
+    GroupBy(bucket).
+    OrderBy(bucket.Asc()).
+    All(ctx)
+```
+
+Group by the **same expression** you selected. Two `DateTrunc` calls with the
+same arguments render the same SQL, so PostgreSQL matches them — but binding it
+to a variable says so, and reads better.
+
+## Extracting
+
+```go
+orm.Extract(orm.Year, Events.At, orm.Integer)         // -> int32
+orm.Extract(orm.DayOfWeek, Events.At, orm.Integer)    // 0 = Sunday
+orm.Extract(orm.EpochSecond, Events.At, orm.BigInt)   // -> int64
+```
+
+The third argument is the type you want back, as a `PGType` value. PostgreSQL's
+`extract` returns `numeric`, so something has to say what to cast it to, and
+saying it here means the Go type is decided rather than asserted.
+
+The fields:
+
+```go
+orm.Year   orm.Quarter  orm.Month  orm.Week  orm.Day
+orm.Hour   orm.Minute   orm.Second
+orm.DayOfWeek  orm.DayOfYear  orm.EpochSecond
+```
+
+## Comparing
+
+Timestamps are ordered columns, so the ordinary predicates apply:
+
+```go
+db.Events.Query().Where(Events.At.Between(dayStart, dayEnd))
+db.Events.Query().Where(Events.At.Gte(cutoff))
+db.Events.Query().OrderBy(Events.At.Desc())
+```
+
+For "within the last N", compute the boundary in Go rather than in SQL when you
+can — a bind parameter is a better plan input than an expression the planner has
+to evaluate per row.
+
+## Worked examples
+
+### A daily signup chart
+
+```go
+day := orm.DateTrunc(orm.Day, Accounts.CreatedAt)
+
+var perDay = orm.Project2(
+    day, orm.Count[Account](),
+    func(d time.Time, n int64) Point { return Point{d, n} },
+)
+
+rows, err := orm.Select(db.Accounts, perDay).
+    Where(Accounts.CreatedAt.Gte(since)).
+    GroupBy(day).
+    OrderBy(day.Asc()).
+    All(ctx)
+```
+
+Monthly is the same query with one word changed, which is the point of naming
+the bucket.
+
+### Opening hours
+
+```go
+hour := orm.Extract(orm.Hour, Visits.At, orm.Integer)
+dow  := orm.Extract(orm.DayOfWeek, Visits.At, orm.Integer)
+
+var heat = orm.Project3(
+    dow, hour, orm.Count[Visit](),
+    func(d, h int32, n int64) Cell { return Cell{d, h, n} },
+)
+
+orm.Select(db.Visits, heat).GroupBy(dow, hour).All(ctx)
+```
+
+### A trial that expires
+
+```go
+// Trials ending in the next three days.
+soon := time.Now().Add(72 * time.Hour)
+db.Trials.Query().Where(Trials.EndsAt.Between(time.Now(), soon))
+
+// Extending one, in SQL, without reading it first.
+db.Trials.Update(ctx).
+    SetExpr(Trials.EndsAt, orm.AddInterval(Trials.EndsAt, orm.Val(orm.IntervalOf(0, 14, 0)))).
+    Where(Trials.ID.Eq(id)).
+    Exec(ctx)
+```
+
+`IntervalOf(0, 14, 0)` is fourteen **days**, not 336 hours. Across a
+daylight-saving boundary those are different instants, and the interval keeps
+the distinction that a `Duration` would throw away.
+
+
+---
+
+# Full-text search
+
+> tsvector, tsquery and ranking — the pieces PostgreSQL has, kept apart.
+
+https://ormgo.vercel.app/en/docs/fulltext/
+
+## The two types
+
+`tsvector` is a document, processed into lexemes. `tsquery` is a search
+expression. They are different types and matching is an operator between them,
+which is why this is not a single `Search(string)` method: the vector usually
+lives in a column, and the query is built per request.
+
+```go
+//orm:table public.articles
+type Article struct {
+    ID     int64       `orm:"pk,identity"`
+    Title  string
+    Body   string
+    Search orm.TSVector `orm:"pgtype:tsvector"`
+}
+```
+
+## Matching
+
+```go
+q := orm.PlainToTSQuery(orm.English, userInput)
+
+articles, err := db.Articles.Query().
+    Where(orm.Matches(Articles.Search, q)).
+    All(ctx)
+```
+
+```sql
+search @@ plainto_tsquery('english', $1)
+```
+
+`orm.Matches` is a free function taking the vector and the query, because
+either side can be a column or an expression.
+
+## Building a query
+
+Four constructors, and the difference between them is how they treat the user's
+text:
+
+```go
+orm.PlainToTSQuery(orm.English, "postgres indexing")
+// every word ANDed; punctuation ignored. The safe default for a search box.
+
+orm.PhraseToTSQuery(orm.English, "index only scan")
+// the words in that order, adjacent
+
+orm.WebSearchToTSQuery(orm.English, `"index only" -bitmap`)
+// Google-ish syntax: quoted phrases, OR, and leading minus for NOT
+
+orm.ToTSQuery(orm.English, "index & postgres")
+// raw tsquery syntax — & | ! <-> — and it errors on malformed input
+```
+
+Only the last takes operator syntax, so only the last can fail on what a user
+typed. That is the one to keep away from a public search box.
+
+Combining:
+
+```go
+orm.AndTSQuery(a, b)
+orm.OrTSQuery(a, b)
+orm.NotTSQuery(a)
+```
+
+## Configurations
+
+The first argument is the text-search configuration, which decides stemming and
+stop words:
+
+```go
+orm.English   // "english"
+orm.Simple    // "simple" — no stemming, no stop words
+orm.TextSearchConfig("russian")
+```
+
+It is a named string type, so any configuration the server has is available
+without waiting for a constant to be added.
+
+## Ranking
+
+```go
+q := orm.PlainToTSQuery(orm.English, input)
+rank := orm.TSRank(Articles.Search, q)
+
+type Hit struct {
+    Title string
+    Rank  float32
+}
+
+var hits = orm.Project2(
+    Articles.Title, rank,
+    func(title string, r float32) Hit { return Hit{title, r} },
+)
+
+rows, err := orm.Select(db.Articles, hits).
+    Where(orm.Matches(Articles.Search, q)).
+    OrderBy(rank.Desc()).
+    Limit(20).
+    All(ctx)
+```
+
+`TSRankCD` is cover-density ranking, which accounts for how close the matched
+lexemes are to each other. Both have `…Null` forms for a nullable vector.
+
+Note that the query is built **once** and used twice — in the `WHERE` and in the
+ranking. Building it twice would put the same text in two bind parameters and
+make the planner work harder for no reason.
+
+## Building a vector in SQL
+
+When the column is text rather than a stored `tsvector`:
+
+```go
+vec := orm.ToTSVector(orm.English, Articles.Body)
+db.Articles.Query().Where(orm.Matches(vec, q))
+```
+
+That cannot use a `tsvector` index, so it is for occasional queries rather than
+for the search path. For the search path, store the vector in a column — usually
+a generated one — and index it.
+
+## Weights
+
+```go
+title := orm.SetWeight(orm.ToTSVector(orm.English, Articles.Title), orm.WeightA)
+body  := orm.SetWeight(orm.ToTSVector(orm.English, Articles.Body), orm.WeightB)
+both  := orm.Concat2TSVector(title, body)
+```
+
+`WeightA` through `WeightD` are what make a title match outrank a body match.
+Ranking reads them; matching ignores them.
+
+## Worked examples
+
+### A help centre
+
+Ranked results, with the query built once:
+
+```go
+q := orm.PlainToTSQuery(orm.English, input)
+rank := orm.TSRank(Articles.Search, q)
+
+var hits = orm.Project3(
+    Articles.Slug, Articles.Title, rank,
+    func(slug, title string, r float32) Hit { return Hit{slug, title, r} },
+)
+
+rows, err := orm.Select(db.Articles, hits).
+    Where(orm.Matches(Articles.Search, q)).
+    OrderBy(rank.Desc(), Articles.Title.Asc()).
+    Limit(20).
+    All(ctx)
+```
+
+The tie-break on title matters: without it, two equally ranked articles come back
+in whatever order the plan produced, which changes between runs.
+
+### A search box that accepts operators
+
+```go
+// Users may type: "index only" -bitmap
+q := orm.WebSearchToTSQuery(orm.English, input)
+```
+
+`WebSearchToTSQuery` handles quoted phrases, `OR`, and a leading minus, and it
+cannot fail on malformed input. `ToTSQuery` takes raw `& | ! <->` syntax and
+errors on a stray operator, so it belongs behind an admin form rather than in
+front of the public.
+
+### Weighting a title above a body
+
+```go
+title := orm.SetWeight(orm.ToTSVector(orm.English, Recipes.Title), orm.WeightA)
+body  := orm.SetWeight(orm.ToTSVector(orm.English, Recipes.Method), orm.WeightB)
+doc   := orm.Concat2TSVector(title, body)
+
+orm.Compose(pool, shape).From(Recipes.Source()).
+    Where(orm.Matches(doc, q)).
+    OrderBy(orm.TSRank(doc, q).Desc()).
+    All(ctx)
+```
+
+Computed like this it cannot use an index, so it suits an admin report. For the
+search path, store the weighted vector in a column and index it.
+
+### Filtering and searching together
+
+```go
+orm.Select(db.Articles, hits).
+    Where(Articles.Locale.Eq("en")).
+    Where(Articles.Published.Eq(true)).
+    Where(orm.Matches(Articles.Search, q)).
+    OrderBy(rank.Desc()).
+    All(ctx)
+```
+
+
+---
+
+# PostGIS
+
+> Spatial types that stay spatial — geometry and geography, kept apart.
+
+https://ormgo.vercel.app/en/docs/postgis/
+
+## Opt-in, and separate
+
+PostGIS support is its own package. A project that does not import it never sees
+a spatial API, and the root ORM knows nothing about geometry:
+
+```go
+import "github.com/AlexAli29/orm/postgis"
+```
+
+Everything in it composes through the one extension boundary the root package
+exposes. There is no second query compiler and no second expression model — a
+spatial predicate is an `orm.Predicate` like any other, and it nests into
+composed queries, CTEs and derived tables unchanged.
+
+## The two distinctions that are never blurred
+
+**geometry** is Cartesian, in whatever units the SRID's coordinate system uses.
+**geography** is on the spheroid, with distances and lengths in metres.
+
+They are different PostgreSQL types with different index behaviour and different
+answers, so they are different Go types here. Converting between them is
+something you write, not something that happens to you.
+
+And two facts travel with every value and every column:
+
+- **the shape** — Point, LineString, Polygon, and the multi forms
+- **the SRID** — which coordinate system the numbers are in
+
+Losing either is how a query comes to compare metres with degrees and get a
+number back.
+
+## Declaring a spatial column
+
+The `pgtype` tag carries the shape and the coordinate system, because neither is
+derivable from the Go type:
+
+```go
+//orm:table public.places
+type Place struct {
+    ID   int64  `orm:"pk,identity"`
+    Name string
+
+    // On the spheroid. Distances come back in metres.
+    Spot postgis.Geography `orm:"pgtype:geography(Point,4326)"`
+
+    // Cartesian, in WGS 84 degrees.
+    Location postgis.Geometry `orm:"pgtype:geometry(Point,4326)"`
+
+    // The same place in web Mercator. Relating it to Location without
+    // transforming first is a mistake the SRID makes visible.
+    Projected *postgis.Geometry `orm:"pgtype:geometry(Point,3857)"`
+
+    Footprint *postgis.Geometry `orm:"pgtype:geometry(Polygon,4326)"`
+}
+```
+
+A pointer is a nullable column, as everywhere else. The generator emits
+`GeomCol`, `GeogCol` and their nullable forms, each carrying the SRID, the kind
+and the dimension it was declared with.
+
+## Querying
+
+`postgis.Of` lifts a geometry column into a spatial expression;
+`postgis.OfGeog` does the same for geography:
+
+```go
+// Everything within 5 km of a point, on the spheroid — metres, because
+// geography measures in metres.
+here := postgis.GeographyPoint(-0.1276, 51.5072)
+
+places, err := db.Places.Query().
+    Where(postgis.OfGeog(Places.Spot).
+        DWithin(postgis.GeogValue[Place](here), 5000)).
+    All(ctx)
+```
+
+```go
+// Cartesian relationships, on geometry.
+db.Places.Query().Where(postgis.Of(Places.Location).Intersects(v))
+db.Places.Query().Where(postgis.Of(Places.Location).Within(v))
+db.Places.Query().Where(postgis.Of(Places.Location).Contains(v))
+```
+
+### Bounding-box operators are named as such
+
+```go
+postgis.Of(Places.Location).BBoxIntersects(v)  // &&
+postgis.Of(Places.Location).BBoxContains(v)    // ~
+postgis.Of(Places.Location).BBoxWithin(v)      // @
+```
+
+`&&` is not `ST_Intersects`. It compares bounding boxes, which is cheaper and
+answers a different question — so it gets a different name rather than being
+presented as a faster version of the exact one.
+
+## Measurements and transformations
+
+These return ordinary `orm.Value`, so they go in projections and orderings like
+anything else:
+
+```go
+distance := postgis.OfGeog(Places.Spot).Distance(postgis.GeogValue[Place](here))
+
+type Near struct {
+    Name   string
+    Metres float64
+}
+
+var near = orm.Project2(
+    Places.Name, distance,
+    func(name string, m float64) Near { return Near{name, m} },
+)
+
+rows, err := orm.Select(db.Places, near).
+    OrderBy(distance.Asc()).
+    Limit(20).
+    All(ctx)
+```
+
+Also available on an expression: `Area`, `Length`, `Centroid`, `Buffer`,
+`Boundary`, `Azimuth`, `AsText`, `AsEWKT`, `AsGeoJSON`, `AsBinary`, `AsEWKB`,
+and `AsGeography` for the conversion you write deliberately. Each has a `…Null`
+form for the nullable column, because a measurement of a NULL geometry is NULL.
+
+## Aggregates
+
+```go
+postgis.Collect(g)   // ST_Collect   -> *Geometry
+postgis.UnionAgg(g)  // ST_Union     -> *Geometry
+postgis.Extent(g)    // ST_Extent    -> *Box2D
+postgis.Extent3D(g)  // ST_3DExtent  -> *Box3D
+```
+
+## Registering the types
+
+pgx needs to be told about the PostGIS types on each connection:
+
+```go
+cfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+    return postgis.Register(ctx, conn)
+}
+```
+
+`RegisterIfPresent` is the tolerant form — it reports whether the extension was
+there rather than failing, which is what a binary that runs against both spatial
+and plain databases wants.
+
+## Versions this is proved against
+
+PostgreSQL 17 with PostGIS 3.5, 16 with 3.4, and 14 with 3.4.
+
+The spatial suite skips when the extension is unavailable, which is right on a
+developer's machine and wrong in CI — so CI sets `ORM_REQUIRE_POSTGIS=1`, which
+turns the skip into a failure. A support claim nothing exercises is a claim
+nobody should believe.
+
+The ORM never creates the extension. `CREATE EXTENSION postgis` is a privileged
+operation belonging to whoever owns the database.
+
+## Worked examples
+
+### Shops near me
+
+```go
+here := postgis.GeographyPoint(lon, lat)
+
+type Near struct {
+    Name   string
+    Metres float64
+}
+
+distance := postgis.OfGeog(Shops.Spot).Distance(postgis.GeogValue[Shop](here))
+
+var near = orm.Project2(
+    Shops.Name, distance,
+    func(name string, m float64) Near { return Near{name, m} },
+)
+
+rows, err := orm.Select(db.Shops, near).
+    Where(postgis.OfGeog(Shops.Spot).DWithin(postgis.GeogValue[Shop](here), 2000)).
+    OrderBy(distance.Asc()).
+    Limit(10).
+    All(ctx)
+```
+
+`DWithin` before `Distance` matters: the first can use a spatial index, the
+second cannot. Filtering then sorting is the difference between a query and a
+full scan.
+
+### Which delivery zone covers an address
+
+```go
+zone, err := db.Zones.Query().
+    Where(postgis.Of(Zones.Area).Contains(postgis.Of(Addresses.Point))).
+    One(ctx)
+```
+
+### A bounding box for a map viewport
+
+```go
+box := postgis.MakeEnvelope(west, south, east, north, 4326)
+
+pins, err := db.Pins.Query().
+    Where(postgis.Of(Pins.Location).BBoxIntersects(box)).
+    Limit(500).
+    All(ctx)
+```
+
+`BBoxIntersects` is `&&`, which compares bounding boxes. For a rectangular
+viewport that is the exact question, and it is the cheap one.
+
+### Exporting for a map client
+
+```go
+var geo = orm.Project2(
+    Zones.Name, postgis.Of(Zones.Area).AsGeoJSON(),
+    func(name, geom string) Feature { return Feature{name, geom} },
+)
+```
+
+### Registering the types
+
+```go
+cfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+    return postgis.Register(ctx, conn)
+}
+```
+
+
+---
+
+# Migrations
+
+> Planning, applying and proving schema change.
+
+https://ormgo.vercel.app/en/docs/migrations/
+
+## The model
+
+In managed mode the declarations are the desired state. `makemigrations` diffs them against the state the existing migration artifacts describe — not against the live database — and writes the difference as an artifact.
+
+That distinction matters: planning against the live database would produce a migration that depends on the database it was planned on.
+
+```bash
+orm makemigrations              # plan and write
+orm makemigrations --dry-run --sql   # show the SQL, write nothing
+orm makemigrations --check      # fail if anything is unplanned
+orm migrate                     # apply
+orm migrate --plan              # show what would be applied
+orm showmigrations              # what is applied, what is pending
+```
+
+## Artifacts are portable
+
+A migration is JSON describing operations, not a SQL script. Two consequences:
+
+- It replays identically on every supported PostgreSQL major.
+- It contains nothing server-local: no OIDs, no database name, no server version, no deparsed definition, no absolute paths. An artifact carrying any of those converges on the machine that wrote it and nowhere else.
+
+## Transactions
+
+Every migration applies inside one transaction, together with its own history record. A migration that fails is rolled back and **not recorded** — so a failed run leaves the database exactly as it was, and running it again fails the same way rather than half-applying.
+
+```text
+Applying 0002_add_orders ... FAILED
+
+orm migrate: migration 0002_add_orders failed at operation 1
+(alter column public.orders.total: type text -> numeric); the transaction was
+rolled back and the migration is not recorded: ERROR: column "total" cannot be
+cast automatically to type numeric (SQLSTATE 42804)
+```
+
+Note what that is: the planner planned it, and **PostgreSQL** refused it. The ORM does not invent a `USING` expression to make such a migration succeed — that would be the tool deciding, on your behalf, what happens to the rows that do not convert.
+
+## Destructive changes are gated
+
+Dropping a column or a table is not planned silently. The gate exists because the cost of a wrong `DROP` is unbounded and the cost of an extra confirmation is one command.
+
+## What migrations do not do
+
+Two frozen boundaries:
+
+- **Migrations do not create schemas.** `CREATE SCHEMA` is yours.
+- **Migrations do not create domains or extensions.** Same reason.
+
+They are prerequisites, not schema change, and pretending otherwise would make `orm migrate` a thing you run as a superuser.
+
+## Materialized views
+
+A materialized view holds rows computed from a body, so changing that body is not a column change — the rows are wrong afterwards. The planner refuses a definition change rather than silently rebuilding, and tells you to write an explicit migration.
+
+Indexes on a materialized view are planned separately from the relation, which is what makes concurrent refresh eligibility a fact the generator can record. See [Views](/en/docs/views/).
+
+## Checking in CI
+
+```bash
+orm makemigrations --check   # every declaration has a migration behind it
+orm check --generated        # the committed generated code is current
+```
+
+The first fails when somebody changed a struct and forgot to plan. The second fails when somebody planned and forgot to regenerate.
+
+## Worked examples
+
+### Adding a column safely
+
+Adding a nullable column is instant. Adding a `NOT NULL` one with no default
+rewrites the table and blocks writes while it does — so it is three migrations,
+not one:
+
+```go
+// 1. Add it nullable.
+Currency *string
+
+// 2. Backfill, outside a migration, in batches.
+// 3. Then make it NOT NULL.
+Currency string `orm:"default:'EUR'"`
+```
+
+`orm makemigrations --dry-run --sql` shows which of these PostgreSQL will do
+cheaply, before you find out on production.
+
+### Renaming without downtime
+
+The planner sees a dropped column and an added one, not a rename, and dropping a
+column deletes its data. Add, dual-write, backfill, drop — four deploys:
+
+```bash
+orm makemigrations --dry-run --sql   # read it before you believe it
+```
+
+### Checking a deploy is complete
+
+```bash
+orm showmigrations         # what is applied, what is pending
+orm migrate --plan         # exactly what the next run would do
+orm check --generated      # committed code matches the schema
+```
+
+### The CI gate
+
+```yaml
+- run: orm makemigrations --check   # a declaration nobody planned
+- run: orm check --generated        # a plan nobody regenerated for
+```
+
+The first fails when somebody changed a struct and forgot. The second fails when
+somebody planned and forgot to regenerate. Between them the three
+representations cannot drift apart.
+
+
+---
+
+# Views and materialized views
+
+> Read sources the ORM treats as first class, and the refresh lifecycle.
+
+https://ormgo.vercel.app/en/docs/views/
+
+## Views
+
+A view is declared like a table, plus the definition and what it depends on:
+
+```go
+//orm:view public.user_orders
+//orm:definition `SELECT u.id AS user_id, o.id AS order_id, o.label
+//                  FROM users u JOIN orders o ON o.user_id = u.id`
+//orm:depends-on public.users
+//orm:depends-on public.orders
+type UserOrder struct {
+    UserID  int64
+    OrderID int64
+    Label   string
+}
+```
+
+`depends-on` is what orders the migration plan. A view created before the table it selects from is a migration that fails on a clean database and works on yours.
+
+## View columns are nullable
+
+A view's output nullability is not provable from the definition, so every column comes back as the nullable descriptor:
+
+```go
+UserOrders.UserID // NullOrdCol[UserOrder, int64], not OrdCol
+```
+
+That is honest rather than conservative: `SELECT ... FROM a LEFT JOIN b` can produce NULL in a column whose base is `NOT NULL`, and the view does not record which.
+
+## Reading from one
+
+A `ViewRepo` offers `Query` and `QueryFrom` and nothing else. It is the same
+query builder a table gets — the same predicates, ordering, paging, projections
+and composition:
+
+```go
+rows, err := db.MonthlyRevenues.Query().
+    Where(MonthlyRevenues.Plan.Eq("pro")).
+    OrderBy(MonthlyRevenues.Month.Desc()).
+    Limit(12).
+    All(ctx)
+```
+
+What it does **not** offer is writes. There is no `Insert`, `Update` or `Delete`
+on the repo, because PostgreSQL has none for a view without a rule or a trigger —
+so there is nothing that could be generated even in principle.
+
+### Nullable columns change how predicates read
+
+Every view column is a nullable descriptor, so `IsNull` exists on all of them and
+the value type is the plain one:
+
+```go
+// The comparison takes a plain string; the column is nullable, not the argument.
+db.MonthlyRevenues.Query().Where(MonthlyRevenues.Plan.Eq("pro"))
+
+// And this is available on every column, which it would not be on a table.
+db.MonthlyRevenues.Query().Where(MonthlyRevenues.Cents.IsNull())
+```
+
+If that is noise on a view whose columns are genuinely never NULL, the answer is
+to scan into pointers or to project the columns you want with a shape of your
+own — not to declare them non-nullable, which the ORM cannot prove.
+
+### A materialized view reads a snapshot
+
+```go
+rows, err := db.SearchRows.Query().
+    Where(SearchRows.Name.ILike("%lamp%")).
+    Limit(20).
+    All(ctx)
+```
+
+Identical to querying a table, and that is the point of one: the work happened at
+refresh time. The rows are as old as the last successful refresh, which is the
+trade you accepted when you chose a materialized view over a plain one.
+
+### Joining a view to a table
+
+A view is a source like any other, so it composes:
+
+```go
+shape := orm.Project2(
+    orm.Opt(MonthlyRevenues.Cents),
+    orm.Of(Plans.Name),
+    func(cents *int64, name string) Row { return Row{cents, name} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Plans.Source()).
+    LeftJoin(MonthlyRevenues.Source(), orm.Eq(MonthlyRevenues.Plan, Plans.Code)).
+    OrderBy(orm.Of(Plans.Name).Asc()).
+    All(ctx)
+```
+
+### Two occurrences of one view
+
+```go
+thisYear := MonthlyRevenues.As("this_year")
+
+orm.Compose(pool, shape).
+    From(thisYear.Source()).
+    Join(MonthlyRevenues.Source(), orm.Eq(MonthlyRevenues.Plan, thisYear.Plan))
+```
+
+`QueryFrom` is the entity-query equivalent, taking the source you aliased.
+
+## Materialized views
+
+```go
+//orm:materialized-view public.user_summaries
+//orm:definition `SELECT user_id, count(*) AS orders
+//                  FROM user_orders GROUP BY user_id`
+//orm:depends-on public.user_orders
+//orm:index user_summaries_key (UserID) unique
+type UserSummary struct {
+    UserID int64
+    Orders int64
+}
+```
+
+`db.UserSummaries` is a `MaterializedViewRepo`. It offers what a view offers plus `Refresh`, and no writes — PostgreSQL has no `INSERT` for a materialized view, so there is nothing that could be generated even in principle.
+
+## Refresh
+
+```go
+err := db.UserSummaries.Refresh(ctx)                     // REFRESH MATERIALIZED VIEW
+err := db.UserSummaries.Refresh(ctx, orm.Concurrently()) // ... CONCURRENTLY
+err := db.UserSummaries.Refresh(ctx, orm.WithNoData())   // ... WITH NO DATA
+```
+
+`CONCURRENTLY` needs a unique index over a non-partial set of plain columns. The generator works that out and writes the answer into the descriptor, so the check costs no round trip:
+
+```text
+orm: Refresh public.user_summaries: CONCURRENTLY needs a unique index over plain
+columns covering every row, and this materialized view has none. A partial or
+expression unique index does not qualify. Add one, or refresh without Concurrently
+```
+
+## The two ways that answer goes stale
+
+The eligibility answer is a fact about the schema **at generation time**, and the schema keeps moving. The two resulting states fail in opposite directions, and knowing which you are in is the whole reason to regenerate.
+
+**Behind the database.** The index arrives; the descriptor has not been regenerated. The code refuses locally and sends nothing. Nothing is broken — something is unavailable. `orm check --generated` reports it.
+
+**Ahead of the database.** The index goes; the descriptor still says yes. The statement goes out and PostgreSQL refuses it:
+
+```go
+if err := db.UserSummaries.Refresh(ctx, orm.Concurrently()); err != nil {
+    var pge *pgconn.PgError
+    if errors.As(err, &pge) && pge.Code == "55000" {
+        // object not in prerequisite state — the index is gone
+    }
+}
+```
+
+The error arrives as PostgreSQL's own. Rewriting it into a generic "refresh failed" would lose the SQLSTATE and everything a caller could branch on.
+
+## Concurrent refresh, chosen deterministically
+
+When several indexes qualify, the lowest name wins. It has to be deterministic: the generated descriptor and the fingerprint computed from it must name the same index on two runs over one schema, or every regeneration produces a diff.
+
+## Worked examples
+
+### A reporting view
+
+```go
+//orm:view analytics.monthly_revenue
+//orm:definition `SELECT date_trunc('month', issued_at) AS month,
+//                       plan, sum(amount_cents) AS cents
+//                  FROM billing.invoices GROUP BY 1, 2`
+//orm:depends-on billing.invoices
+type MonthlyRevenue struct {
+    Month time.Time
+    Plan  string
+    Cents int64
+}
+```
+
+Every column comes back nullable, because a view's output nullability is not
+provable — `sum` over no rows is NULL and the definition does not record which
+columns can be.
+
+### A materialized view that refreshes concurrently
+
+```go
+//orm:materialized-view analytics.search_index
+//orm:definition `SELECT p.id, p.name, p.tags FROM catalog.products p WHERE p.listed`
+//orm:depends-on catalog.products
+//orm:index search_index_id_key (ID) unique
+type SearchRow struct {
+    ID   int64
+    Name string
+    Tags []string
+}
+```
+
+The unique index over one plain column is what makes `Concurrently` possible.
+Without it the refresh takes an exclusive lock and the site stops serving while
+it runs.
+
+```go
+if err := db.SearchRows.Refresh(ctx, orm.Concurrently()); err != nil {
+    var pge *pgconn.PgError
+    if errors.As(err, &pge) && pge.Code == "55000" {
+        // the index is gone; regenerate and redeploy
+    }
+    return err
+}
+```
+
+### Refreshing on a schedule
+
+```go
+func refreshLoop(ctx context.Context, db *domain.DB) {
+    t := time.NewTicker(5 * time.Minute)
+    defer t.Stop()
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-t.C:
+            if err := db.SearchRows.Refresh(ctx, orm.Concurrently()); err != nil {
+                log.Printf("refresh: %v", err)
+            }
+        }
+    }
+}
+```
+
+A concurrent refresh does not block readers, so a five-minute tick is a cost in
+CPU rather than in availability.
+
+
+---
+
+# Queries
+
+> Reading entities: filters, ordering, paging and the terminal operations.
+
+https://ormgo.vercel.app/en/docs/queries/
+
+## The shape
+
+```go
+users, err := db.Users.Query().
+    Where(Users.Active.Eq(true)).
+    OrderBy(Users.CreatedAt.Desc()).
+    Limit(50).
+    All(ctx)
+```
+
+A `Query` is mutable and single-use. `Clone` branches one when you want a base:
+
+```go
+base := db.Users.Query().Where(Users.Active.Eq(true))
+recent := base.Clone().Where(Users.CreatedAt.Gte(cutoff))
+count, _ := base.Clone().Count(ctx)
+```
+
+## Terminals
+
+| Method | Returns |
+| --- | --- |
+| `All(ctx)` | `[]E` |
+| `One(ctx)` | `E`, or `ErrNotFound` |
+| `Count(ctx)` | `int64` |
+| `Exists(ctx)` | `bool` |
+| `Rows(ctx)` | `iter.Seq2[E, error]` — streams |
+| `SQL()` | the statement and its arguments, without running it |
+
+Builder mistakes accumulate and surface together from the terminal, so a query that cannot be built never reaches PostgreSQL:
+
+```go
+_, err := db.Users.Query().Where(broken).OrderBy(alsoBroken).All(ctx)
+// err reports both, not just the first
+```
+
+## Where
+
+Multiple `Where` calls are ANDed. That is the common case and it keeps dynamic filtering readable:
+
+```go
+q := db.Users.Query()
+if email != "" {
+    q = q.Where(Users.Email.ILike("%" + email + "%"))
+}
+if onlyActive {
+    q = q.Where(Users.Active.Eq(true))
+}
+users, err := q.All(ctx)
+```
+
+For OR, combine explicitly:
+
+```go
+db.Users.Query().Where(orm.Or(
+    Users.Email.Eq("a@example.com"),
+    Users.Email.Eq("b@example.com"),
+))
+```
+
+`orm.And()` over an empty slice produces a query with no `WHERE` at all rather than `WHERE TRUE`.
+
+## Ordering and paging
+
+```go
+db.Users.Query().
+    OrderBy(Users.CreatedAt.Desc(), Users.ID.Asc()).
+    Limit(20).
+    Offset(40)
+```
+
+`Limit(0)` is a legal query that returns nothing. Only a negative value is a mistake.
+
+Keyset paging beats `OFFSET` on large tables, and the typed API expresses it directly:
+
+```go
+db.Users.Query().
+    Where(orm.Or(
+        Users.CreatedAt.Lt(lastSeenAt),
+        orm.And(Users.CreatedAt.Eq(lastSeenAt), Users.ID.Lt(lastSeenID)),
+    )).
+    OrderBy(Users.CreatedAt.Desc(), Users.ID.Desc()).
+    Limit(20)
+```
+
+## Streaming
+
+`Rows` yields as the server sends, so a large result never all exists at once:
+
+```go
+for user, err := range db.Users.Query().Rows(ctx) {
+    if err != nil {
+        return err
+    }
+    if err := handle(user); err != nil {
+        return err
+    }
+}
+```
+
+A relation needing a statement of its own would have to see every row before it could run — which is the one thing streaming exists to avoid — so `Rows` refuses `With` rather than quietly buffering.
+
+## Locking
+
+```go
+db.Users.Query().Where(Users.ID.Eq(id)).ForUpdate()
+db.Users.Query().Lock(orm.ForUpdateStrong, orm.SkipLocked())
+db.Users.Query().Lock(orm.ForShare, orm.NoWait())
+```
+
+Locking the nullable side of an outer join is something PostgreSQL refuses, so when the statement has joins the lock names the root table explicitly.
+
+## Seeing the SQL
+
+```go
+sql, args, err := db.Users.Query().Where(Users.Active.Eq(true)).SQL()
+// SELECT "users"."id", ... FROM "public"."users" WHERE "users"."active" = $1
+// args: [true]
+```
+
+Values are never in the SQL. Every one is a bind parameter, including the ones inside `Expr` fragments.
+
+## Worked examples
+
+Three different schemas, because a filter reads differently depending on what it
+is filtering.
+
+### A parcel tracker
+
+Shipments that left a warehouse but have not arrived, oldest first — the queue a
+dispatcher works through.
+
+```go
+stuck, err := db.Shipments.Query().
+    Where(Shipments.DepartedAt.IsNotNull()).
+    Where(Shipments.ArrivedAt.IsNull()).
+    Where(Shipments.DepartedAt.Lt(time.Now().Add(-48*time.Hour))).
+    OrderBy(Shipments.DepartedAt.Asc()).
+    Limit(100).
+    All(ctx)
+```
+
+The two NULL checks are the whole query: departed is set, arrived is not. On a
+nullable column that reads as plainly as the sentence, and on a `NOT NULL` one
+neither method exists to be misused.
+
+### A ledger
+
+The last statement line for one account, and whether there are any at all.
+
+```go
+latest, err := db.Entries.Query().
+    Where(Entries.AccountID.Eq(accountID)).
+    OrderBy(Entries.PostedAt.Desc(), Entries.ID.Desc()).
+    One(ctx)
+if errors.Is(err, orm.ErrNotFound) {
+    // a new account, not a broken one
+}
+
+any, err := db.Entries.Query().Where(Entries.AccountID.Eq(accountID)).Exists(ctx)
+```
+
+`One` returning `ErrNotFound` is a normal answer to a normal question. `Exists`
+selects a constant rather than a row, so asking costs no decoding.
+
+### A telemetry table
+
+Readings from a set of devices, in a window, streamed because there are too many
+to hold.
+
+```go
+for reading, err := range db.Readings.Query().
+    Where(Readings.DeviceID.In(deviceIDs...)).
+    Where(Readings.At.Between(from, to)).
+    OrderBy(Readings.At.Asc()).
+    Rows(ctx) {
+    if err != nil {
+        return err
+    }
+    if err := accumulate(reading); err != nil {
+        return err
+    }
+}
+```
+
+`Rows` yields as the server sends. The whole window never exists in memory at
+once, which is the difference between a report that runs and one that is killed.
+
+
+---
+
+# Predicates
+
+> The comparisons each column type offers, and why the set differs.
+
+https://ormgo.vercel.app/en/docs/predicates/
+
+## The set depends on the type
+
+A predicate exists on a descriptor when PostgreSQL defines the operation for that type. That is why the lists differ, and why the difference is a compile error rather than a runtime one.
+
+### Every column
+
+```go
+Users.Email.Eq("a@example.com")
+Users.Email.Ne("a@example.com")
+Users.Email.In("a@example.com", "b@example.com")
+Users.ID.In(ids...)          // for a slice you already have
+```
+
+There is deliberately no `NotIn`. `orm.Not(Users.ID.In(...))` says the same thing and says it once.
+
+### Ordered columns
+
+Any type PostgreSQL orders — integers, floats, text, dates, `uuid`, `inet`, `interval`:
+
+```go
+Users.CreatedAt.Gt(t)
+Users.CreatedAt.Gte(t)
+Users.CreatedAt.Lt(t)
+Users.CreatedAt.Lte(t)
+Users.CreatedAt.Between(from, to)
+Users.CreatedAt.Asc()
+Users.CreatedAt.Desc()
+```
+
+`jsonb` and `bytea` have a total order for indexing, but comparing two of them answers no question anybody asks, so they stay at equality.
+
+### Text columns
+
+```go
+Users.Email.Like("%@example.com")
+Users.Email.ILike("%@EXAMPLE.com")
+orm.Not(Users.Email.Like("%@spam.test"))
+Users.Email.Like("admin%")
+Users.Email.Like("%.org")
+Users.Email.Like("%example%")
+```
+
+### Nullable columns
+
+Only nullable columns have these, because on a `NOT NULL` column they answer a question that cannot arise:
+
+```go
+Users.Bio.IsNull()
+Users.Bio.IsNotNull()
+Users.Bio.Eq("hello")   // still available: it means bio = 'hello'
+```
+
+### Arrays
+
+Array containment is free functions rather than methods, and they produce a
+`Predicate[Composed]`. A non-nullable column is lifted with `orm.Opt`:
+
+```go
+orm.ArrayContains(orm.Opt(Users.Tags), orm.Val([]string{"go"}))     // @>
+orm.ArrayContainedBy(orm.Opt(Users.Tags), orm.Val(all))             // <@
+orm.ArrayOverlaps(orm.Opt(Users.Tags), orm.Val([]string{"a", "b"})) // &&
+```
+
+### JSONB
+
+Also free functions, for the same reason — either side can be a column or an
+expression. See [JSON and JSONB](/en/docs/json/) for the whole set:
+
+```go
+orm.JSONHasKey(orm.Opt(Users.Meta), "plan")
+orm.JSONPathExists(orm.Opt(Users.Meta), "$.billing.tier")
+orm.JSONPathText(orm.Opt(Users.Meta), "billing", "tier")
+```
+
+### Ranges
+
+```go
+Bookings.During.Overlaps(r)
+Bookings.During.Contains(t)
+Bookings.During.StrictlyLeftOf(other)
+Bookings.During.Adjacent(other)
+```
+
+### Full text
+
+```go
+orm.Matches(Docs.Search, orm.PlainToTSQuery(orm.English, "postgres mapper"))
+orm.TSRank(Docs.Search, query).Desc()
+```
+
+## Combining
+
+```go
+orm.And(a, b, c)
+orm.Or(a, b)
+orm.Not(a)
+```
+
+They nest, and the compiler keeps them on one entity: an `orm.And` mixing a `Predicate[User]` and a `Predicate[Order]` does not compile. That is not pedantry — such a predicate would produce SQL naming a table the statement never introduced.
+
+## Comparing two columns
+
+The column-to-column comparisons are free functions rather than methods, and
+they produce a `Predicate[Composed]` — so they belong in a composed query rather
+than in an entity `Where`:
+
+```go
+orm.Compose(pool, shape).
+    From(Orders.Source()).
+    Where(orm.Gt(Orders.Total, Orders.Paid))
+```
+
+`Eq`, `Ne`, `Gt`, `Gte`, `Lt` and `Lte` all take two typed values, and both sides
+must carry the same value type. The right-hand side can be an expression:
+
+```go
+orm.Eq(Orders.Total, Orders.Net.AddCol(Orders.Tax))
+```
+
+Arithmetic on a column is a method — `Add`, `Sub`, `Mul`, `Div` against a value,
+and `AddCol` or `SubCol` against another column of the same entity.
+
+## Raw fragments
+
+When something has no typed form:
+
+```go
+db.Users.Query().Where(orm.Expr[User]("age(created_at) > interval ?", "1 year"))
+```
+
+`Expr` takes SQL text deliberately. It does not take values formatted into it — every `?` becomes a bind parameter, and the fragment's placeholders are validated against the arguments given.
+
+## Worked examples
+
+### A job board
+
+Three filters that read as three sentences, and one that does not exist in SQL
+until you write it.
+
+```go
+// Remote roles, posted this month, paying at least the floor.
+db.Postings.Query().Where(
+    Postings.Remote.Eq(true),
+    Postings.PostedAt.Gte(monthStart),
+    Postings.SalaryMin.Gte(60000),
+)
+
+// Anything but the agencies we have blocked.
+db.Postings.Query().Where(orm.Not(Postings.CompanyID.In(blocked...)))
+
+// Title or description — one OR, written once.
+db.Postings.Query().Where(orm.Or(
+    Postings.Title.ILike("%golang%"),
+    Postings.Description.ILike("%golang%"),
+))
+```
+
+### A moderation queue
+
+The NULL cases, which are where most filter bugs live:
+
+```go
+// Never reviewed: reviewed_at was never set.
+db.Comments.Query().Where(Comments.ReviewedAt.IsNull())
+
+// Reviewed and cleared: set, and no reason recorded.
+db.Comments.Query().Where(
+    Comments.ReviewedAt.IsNotNull(),
+    Comments.RejectReason.IsNull(),
+)
+
+// Reviewed and rejected with a reason that is not the empty string.
+db.Comments.Query().Where(
+    Comments.RejectReason.IsNotNull(),
+    orm.Not(Comments.RejectReason.Eq("")),
+)
+```
+
+A `NOT NULL` column has no `IsNull`, so the first two cannot be written against
+one by mistake.
+
+### A price book
+
+Comparing two columns, which is a composed query rather than an entity one:
+
+```go
+// Anything currently sold below cost.
+orm.Compose(pool, shape).
+    From(Prices.Source()).
+    Where(orm.Lt(Prices.Retail, Prices.Cost)).
+    All(ctx)
+
+// Margin below a threshold, computed rather than stored.
+orm.Compose(pool, shape).
+    From(Prices.Source()).
+    Where(orm.Lt(Prices.Retail.SubCol(Prices.Cost), orm.Val(int32(500)))).
+    All(ctx)
+```
+
+
+---
+
+# Relations
+
+> Loading what you asked for, in a statement count you can predict.
+
+https://ormgo.vercel.app/en/docs/relations/
+
+## Declaring
+
+```go
+//orm:table public.users
+type User struct {
+    ID     int64 `orm:"pk,identity"`
+    Orders orm.Many[Order]
+}
+
+//orm:table public.orders
+type Order struct {
+    ID     int64 `orm:"pk,identity"`
+    UserID int64
+    User   orm.One[User] `orm:"fk:user_id"`
+}
+```
+
+The foreign key is named on the side that holds it. The generator checks it exists and points where you said.
+
+## Loading
+
+```go
+users, err := db.Users.Query().With(Users.Orders).All(ctx)
+```
+
+`With` loads what it is given and nothing else. There is no lazy loading, so a loop over the result cannot become a query per row.
+
+## Predictable statement counts
+
+Loading is breadth-first and batched. The number of statements follows the shape of the tree you asked for, never the number of rows in it:
+
+```go
+db.Users.Query().
+    With(Users.Orders.With(Orders.Items)).
+    All(ctx)
+// three statements: users, then all their orders, then all those items
+```
+
+Ten users or ten thousand, it is three.
+
+## Configuring a relation
+
+`Rel` carries options — and they apply per parent, which is what makes "the five most recent orders for each user" one statement rather than N:
+
+```go
+db.Users.Query().
+    With(Users.Orders.
+        Where(Orders.Status.Eq("paid")).
+        OrderBy(Orders.Placed.Desc()).
+        Limit(5)).
+    All(ctx)
+```
+
+## Filtering by a relation without loading it
+
+```go
+// users who have at least one paid order
+db.Users.Query().Where(Users.Orders.Any(Orders.Status.Eq("paid")))
+
+// users with none
+db.Users.Query().Where(Users.Orders.None(Orders.Status.Eq("refunded")))
+```
+
+These compile to semi-joins. They load nothing, so they cost nothing to read.
+
+## Reading the result
+
+```go
+for _, u := range users {
+    orders, ok := u.Orders.Get()
+    if !ok {
+        // not loaded — this is different from "loaded and empty"
+        continue
+    }
+    fmt.Println(len(orders))
+}
+```
+
+Three states, distinguishable: unloaded, loaded and empty, loaded and present. The zero value is unloaded, so a struct literal that omits a relation says "I did not ask" rather than "there is nothing".
+
+## What decides relatedness
+
+PostgreSQL does. Rows relate by what the database says equal keys are, so `citext`, `numeric`, domains and composite keys behave as they do in the database rather than as Go equality would.
+
+## Worked examples
+
+### A conference programme
+
+Every track with its talks, and each talk with its speakers — three levels, three
+statements, however many rows.
+
+```go
+tracks, err := db.Tracks.Query().
+    Where(Tracks.ConferenceID.Eq(confID)).
+    With(Tracks.Talks.
+        OrderBy(Talks.StartsAt.Asc()).
+        With(Talks.Speakers)).
+    OrderBy(Tracks.Name.Asc()).
+    All(ctx)
+```
+
+The ordering inside `With` is the talks' own. Sorting them in Go afterwards would
+work and would also mean fetching them in whatever order the server found them.
+
+### A warehouse audit
+
+Products that have never been counted — filtered by the absence of a relation,
+loading nothing:
+
+```go
+uncounted, err := db.Products.Query().
+    Where(Products.Counts.None()).
+    OrderBy(Products.SKU.Asc()).
+    All(ctx)
+```
+
+And the opposite, with a condition on the child:
+
+```go
+disputed, err := db.Products.Query().
+    Where(Products.Counts.Any(Counts.Variance.Gt(0))).
+    All(ctx)
+```
+
+Both compile to semi-joins. Neither brings a single count row back, because you
+did not ask for one.
+
+### A support inbox
+
+Open tickets with only their latest message, which is the per-parent limit doing
+the work:
+
+```go
+tickets, err := db.Tickets.Query().
+    Where(Tickets.Status.Eq("open")).
+    With(Tickets.Messages.
+        OrderBy(Messages.SentAt.Desc()).
+        Limit(1)).
+    OrderBy(Tickets.OpenedAt.Asc()).
+    All(ctx)
+```
+
+`Limit(1)` is per ticket, not per result. One statement returns the newest message
+for each of them.
+
+
+---
+
+# Projections
+
+> Selecting the columns you want, into a type you chose.
+
+https://ormgo.vercel.app/en/docs/projections/
+
+## What a projection is
+
+A projection is two things bundled together:
+
+1. **which expressions to select**, and
+2. **a function that turns those values into your result type**.
+
+That is the whole idea. Everything below is that one idea with more columns.
+
+## Start with one column
+
+An entity query gives you whole entities:
+
+```go
+users, err := db.Users.Query().All(ctx)
+// []User — SELECT id, email, bio, active, created_at FROM users
+```
+
+Suppose you only want the email addresses. Say so:
+
+```go
+var Emails = orm.Project1(
+    Users.Email,                        // select this
+    func(email string) string {         // and hand it back like this
+        return email
+    },
+)
+
+emails, err := orm.Select(db.Users, Emails).All(ctx)
+// []string — SELECT email FROM users
+```
+
+`[]string`, not `[]User`. The database sent one column instead of five, and the result type is whatever your function returned.
+
+## Two columns, into a struct
+
+The result type is yours. Usually it is a struct you declared:
+
+```go
+type Summary struct {
+    ID    int64
+    Email string
+}
+
+var Summaries = orm.Project2(
+    Users.ID,       // 1st expression
+    Users.Email,    // 2nd expression
+    func(id int64, email string) Summary {
+        //   ↑ 1st parameter   ↑ 2nd parameter
+        return Summary{ID: id, Email: email}
+    },
+)
+
+rows, err := orm.Select(db.Users, Summaries).All(ctx)
+// []Summary — SELECT id, email FROM users
+```
+
+**Read the call top to bottom.** `Project2` takes two expressions, so the function takes two parameters, in the same order. The first parameter is the first column, the second is the second.
+
+**The parameter types are not your choice.** `Users.ID` is a `bigint`, so the first parameter must be `int64`. `Users.Email` is `text`, so the second must be `string`. Write `func(id string, ...)` and it does not compile — the mismatch is caught where you wrote it, not when a row arrives.
+
+That is why the number is in the name: `Project1` for one expression, `Project2` for two, and so on up to `Project50`.
+
+## Anything that produces a value
+
+An expression does not have to be a plain column. An aggregate is an expression:
+
+```go
+type ByStatus struct {
+    Status string
+    Count  int64
+}
+
+var byStatus = orm.Project2(
+    Orders.Status,        // a column
+    orm.Count[Order](),   // count(*)
+    func(status string, n int64) ByStatus {
+        return ByStatus{Status: status, Count: n}
+    },
+)
+
+rows, err := orm.Select(db.Orders, byStatus).
+    GroupBy(Orders.Status).
+    All(ctx)
+// []ByStatus — SELECT status, count(*) FROM orders GROUP BY status
+```
+
+`orm.Count[Order]()` returns `int64`, so the second parameter is `int64`. Same rule as before.
+
+## Where a projection can be used
+
+The projection says *what to select*. Something else says *where from*:
+
+```go
+orm.Select(db.Users, Summaries)                     // from the users table
+orm.SelectFrom(db.Users, Users.As("u"), Summaries)  // from an alias of it
+orm.Compose(pool, shape)                            // from sources you joined
+```
+
+A `Projection` is a value, not a query. Build it once at package level and use it from as many queries as you like — it is immutable and safe to share.
+
+```go
+// one shape, three queries
+active, _ := orm.Select(db.Users, Summaries).Where(Users.Active.Eq(true)).All(ctx)
+recent, _ := orm.Select(db.Users, Summaries).OrderBy(Users.ID.Desc()).Limit(10).All(ctx)
+count,  _ := orm.Select(db.Users, Summaries).Count(ctx)
+```
+
+## When to reach for one
+
+| Use | When |
+| --- | --- |
+| An entity query | You want the row and most of its columns |
+| A projection | You want a few columns, an aggregate, or a shape that is not a table row |
+
+A projection is also the only way to select something that is not a column at all — a count, a sum, an expression, a value from a CTE.
+
+## Aggregates
+
+```go
+orm.Count[User]()                 // count(*)      -> int64
+orm.CountOf(Users.Bio)            // count(bio)    -> int64
+orm.Max(Orders.Total)             // max(total)    -> *T
+orm.Min(Orders.Placed)            // min(placed)   -> *T
+orm.SumInt32(Orders.Qty)          // sum(qty)      -> *int64
+orm.AvgInt64(Orders.Qty)          // avg(qty)      -> *N
+orm.SumNumeric[Order, Decimal](Orders.Total)
+```
+
+Most of them return a **pointer**, and that is not caution. `max` over no rows is NULL, and a non-pointer result would have nowhere to put that:
+
+```go
+var maxTotal = orm.Project1(
+    orm.Max(Orders.Total),
+    func(v *int64) *int64 { return v },  // nil when the table is empty
+)
+```
+
+`count` is the exception — over no rows it is zero, so it is a plain `int64`.
+
+## Grouping and having
+
+```go
+orm.Select(db.Orders, byStatus).
+    Where(Orders.Placed.Gte(cutoff)).
+    GroupBy(Orders.Status).
+    Having(orm.Count[Order]().Gt(100)).
+    OrderBy(Orders.Status.Asc()).
+    All(ctx)
+```
+
+Group order is yours and is never sorted — it decides the grouping PostgreSQL performs.
+
+## Distinct
+
+```go
+orm.Select(db.Orders, shape).Distinct()
+orm.Select(db.Orders, shape).DistinctOn(Orders.UserID)
+```
+
+`DISTINCT ON` keeps the first row of each group of equal values, which is a different clause from `DISTINCT`. The two cannot both be set, and the builder says so rather than emitting something PostgreSQL rejects.
+
+## Naming the outputs
+
+When a projection becomes a derived table or a CTE, its columns need names, because something outside will refer to them:
+
+```go
+userID := orm.Named("user_id", orm.Of(Orders.UserID))
+total  := orm.Named("total", orm.Count[orm.Composed]())
+```
+
+The name is required rather than derived. `count(*)` has none, and inventing one from the rendered expression would make a derived table's column depend on how the compiler happened to spell it. See [Composition](/en/docs/composition/).
+
+## How wide a projection can be
+
+`Project50`. Fifty expressions, fifty parameters, one row type.
+
+That is far more than a projection usually wants, and the wide end exists so
+that the ORM is never the reason a query cannot be written — not because a
+fifty-parameter function literal is good style. A reporting row with sixteen
+columns is an ordinary thing and used to have no answer here; a fifty-column one
+is a signal that an entity query, or a projection into a struct built from
+several smaller ones, is the clearer shape.
+
+Two practical notes about the wide ones:
+
+- **The parameters are positional and untyped by name.** At four columns a
+  mismatch is obvious; at thirty, two adjacent `string` parameters swapped
+  compile fine and are wrong. Where several neighbouring columns share a type,
+  name the function's parameters after the columns and construct the result with
+  field names rather than positionally.
+- **Ordering is the only thing binding them.** The Nth expression feeds the Nth
+  parameter. Inserting a column in the middle of the constructor shifts every
+  parameter after it, and the compiler only notices if the types stop lining up.
+
+## Why the arity is in the name
+
+This is the one part that is about Go rather than about SQL, and it is here for the curious rather than because you need it.
+
+Go cannot express "a list of expressions whose result types are all different and all remembered". A variadic parameter has one type, and a type-parameter pack does not exist. Libraries that pretend otherwise do it with `[]any` and runtime assertions, which moves the mistake from the compiler to the customer.
+
+Writing the arity out is what buys the checking above, and it is also what makes the row hot path do no reflection, hold no map and assert nothing. Scanning is N typed locals, one `Scan`, and one call — at fifty columns exactly as much as at two.
+
+`Project1` through `Project8` are written by hand. The rest are generated from the same twelve lines, and a test reads the generated file back to confirm that every arity's expressions, destinations and call arguments are in the same order — because a transposition in generated code compiles, scans without error, and quietly reports the wrong number.
+
+## Worked examples
+
+### A billing report
+
+Revenue per plan, for one month, with the count beside it — the shape a finance
+page actually wants:
+
+```go
+type PlanRevenue struct {
+    Plan    string
+    Charges int64
+    Total   *int64
+}
+
+var planRevenue = orm.Project3(
+    Invoices.Plan,
+    orm.Count[Invoice](),
+    orm.SumInt32(Invoices.AmountCents),
+    func(plan string, n int64, total *int64) PlanRevenue {
+        return PlanRevenue{Plan: plan, Charges: n, Total: total}
+    },
+)
+
+rows, err := orm.Select(db.Invoices, planRevenue).
+    Where(Invoices.IssuedAt.Between(monthStart, monthEnd)).
+    GroupBy(Invoices.Plan).
+    OrderBy(Invoices.Plan.Asc()).
+    All(ctx)
+```
+
+`Total` is `*int64` because `sum` over no rows is NULL, and a plan with no
+invoices in the window is exactly that. The count beside it is not a pointer,
+because `count` over no rows is zero.
+
+### A device roster
+
+One column, into a slice — no struct, because there is nothing to hold:
+
+```go
+var serials = orm.Project1(
+    Devices.Serial,
+    func(s string) string { return s },
+)
+
+offline, err := orm.Select(db.Devices, serials).
+    Where(Devices.LastSeenAt.Lt(cutoff)).
+    OrderBy(Devices.Serial.Asc()).
+    All(ctx)
+// []string
+```
+
+### A wide export row
+
+The case the eight-column limit used to block: a nightly export whose columns are
+dictated by whoever receives the file, not by what would be tidy.
+
+```go
+type Shipment struct {
+    Reference   string
+    Carrier     string
+    Service     string
+    Origin      string
+    Destination string
+    Weight      int32
+    Pieces      int32
+    Declared    *int64
+    Booked      time.Time
+    Collected   *time.Time
+    Delivered   *time.Time
+    Status      string
+}
+
+var shipmentExport = orm.Project12(
+    Shipments.Reference,
+    Shipments.Carrier,
+    Shipments.Service,
+    Shipments.Origin,
+    Shipments.Destination,
+    Shipments.WeightGrams,
+    Shipments.Pieces,
+    Shipments.DeclaredValue,
+    Shipments.BookedAt,
+    Shipments.CollectedAt,
+    Shipments.DeliveredAt,
+    Shipments.Status,
+    func(
+        reference, carrier, service, origin, destination string,
+        weight, pieces int32,
+        declared *int64,
+        booked time.Time,
+        collected, delivered *time.Time,
+        status string,
+    ) Shipment {
+        return Shipment{
+            Reference:   reference,
+            Carrier:     carrier,
+            Service:     service,
+            Origin:      origin,
+            Destination: destination,
+            Weight:      weight,
+            Pieces:      pieces,
+            Declared:    declared,
+            Booked:      booked,
+            Collected:   collected,
+            Delivered:   delivered,
+            Status:      status,
+        }
+    },
+)
+
+rows, err := orm.Select(db.Shipments, shipmentExport).
+    Where(Shipments.BookedAt.Gte(since)).
+    OrderBy(Shipments.BookedAt.Asc()).
+    All(ctx)
+```
+
+Two habits make a projection this wide safe to change. The parameters are named
+after their columns rather than `a, b, c`, so a reader can check the order
+against the constructor above without counting. And the struct is built with
+field names, so a swapped pair of `string` parameters — which the compiler
+cannot see — is at least visible in the diff.
+
+The three pointers are not decoration. `CollectedAt` and `DeliveredAt` are NULL
+for a shipment still in transit, and `DeclaredValue` is NULL when the customer
+did not declare one, which is a different fact from declaring zero.
+
+### A seating chart
+
+Two columns into a map key, because the result type is whatever the function
+returns — it does not have to be a struct:
+
+```go
+type Seat struct{ Row, Number int32 }
+
+var seats = orm.Project2(
+    Tickets.SeatRow, Tickets.SeatNumber,
+    func(r, n int32) Seat { return Seat{Row: r, Number: n} },
+)
+
+taken, err := orm.Select(db.Tickets, seats).
+    Where(Tickets.EventID.Eq(eventID)).
+    Where(Tickets.CancelledAt.IsNull()).
+    All(ctx)
+
+occupied := make(map[Seat]bool, len(taken))
+for _, s := range taken {
+    occupied[s] = true
+}
+```
+
+
+---
+
+# Expressions
+
+> Conditionals, coalescing, casts, string functions, and the escape hatch for the rest.
+
+https://ormgo.vercel.app/en/docs/expressions/
+
+Everything here produces an `Expression` or a `Value`, which means it can go
+anywhere one of those goes: a select list, a `WHERE`, an `ORDER BY`, a `GROUP BY`
+or another expression.
+
+## Literals
+
+```go
+orm.Val("pending")   // Expression[string, *string]
+orm.Val(int64(0))
+orm.Val(true)
+```
+
+A literal becomes a bind parameter, not text in the SQL. That is true of every
+value in this package, and it is why none of these take a format string.
+
+## CASE
+
+```go
+tier := orm.Case(orm.Cond(Orders.Total.Gte(1000)), orm.Val("gold")).
+    When(orm.Cond(Orders.Total.Gte(100)), orm.Val("silver")).
+    Else(orm.Val("bronze"))
+```
+
+```sql
+CASE WHEN total >= $1 THEN $2 WHEN total >= $3 THEN $4 ELSE $5 END
+```
+
+`Case` takes the first condition and its result; `When` adds more; `Else` closes
+it. The branches all carry one type, so a `CASE` mixing a string and an integer
+does not compile.
+
+**`Else` and `End` are different endings.** `Else` supplies a fallback, so the
+result cannot be NULL and its type is `T`. `End` closes without one, so the
+result is NULL when nothing matched and its type widens to `N`:
+
+```go
+grade := orm.Case(orm.Cond(Users.Score.Gte(90)), orm.Val("A")).End()
+// Expression[*string, *string] — NULL for a score under 90
+```
+
+## COALESCE and NULLIF
+
+```go
+orm.Coalesce(Users.Nickname, orm.Of(Users.Email))
+// the nickname, or the email when it is NULL -> string, never NULL
+```
+
+`Coalesce` takes a nullable value first and then the fallbacks. The result is
+non-nullable, because the last fallback is not — that is the point of it.
+
+`CoalesceNull` is the form where every input is nullable and the result may be
+too.
+
+```go
+orm.NullIf(orm.Of(Users.Bio), orm.Val(""))
+// NULL when bio is the empty string, otherwise bio
+```
+
+## Casts
+
+```go
+orm.Cast(Users.ID, orm.Text)          // id::text     -> string
+orm.Cast(Users.Score, orm.BigInt)     // score::bigint
+orm.CastNull(Users.Bio, orm.Text)     // the nullable form
+```
+
+The target is a `PGType` value rather than a string, so the Go result type is
+decided by the cast rather than asserted afterwards. The built-in ones:
+
+```go
+orm.Text  orm.SmallInt  orm.Integer  orm.BigInt
+orm.Boolean  orm.ByteA  orm.DoublePrecision
+orm.Date  orm.Timestamptz
+```
+
+## String functions
+
+```go
+orm.Upper(Users.Email)
+orm.Lower(Users.Email)
+orm.Trim(Users.Name)
+orm.Concat(orm.Of(Users.First), orm.Val(" "), orm.Of(Users.Last))
+```
+
+Each has a `…Null` form taking a nullable column and returning a nullable
+result, because `upper(NULL)` is NULL.
+
+## Arithmetic
+
+Ordered columns carry the operators directly:
+
+```go
+Orders.Total.Add(10)
+Orders.Total.Sub(10)
+Orders.Total.Mul(2)
+Orders.Total.Div(2)
+Orders.Total.AddCol(Orders.Tax)   // column + column
+```
+
+## Anything else PostgreSQL has
+
+`Fn` calls a function the package does not wrap. You supply the name, the
+arguments and — through the type parameter — what it returns:
+
+```go
+// pg_size_pretty(pg_total_relation_size('users'))
+size := orm.Fn[User, string]("pg_size_pretty",
+    orm.ArgRaw("pg_total_relation_size('users')"))
+
+// greatest(score, 0)
+floor := orm.Fn[User, int32]("greatest", orm.ArgOf(Users.Score), orm.ArgValue(0))
+```
+
+| Form | Returns | For |
+| --- | --- | --- |
+| `Fn[E, T]` | `Value[E, T]` | a value in an entity query |
+| `FnNull[E, T]` | `Value[E, *T]` | when it can be NULL |
+| `FnExpr[T]` | `Expression[T, *T]` | a value in a composed query |
+| `FnExprNull[T]` | `Expression[*T, *T]` | |
+| `FnPredicate[E]` | `Predicate[E]` | a function returning boolean |
+
+Arguments are built rather than formatted:
+
+```go
+orm.ArgValue(v)          // a bind parameter
+orm.ArgOf(Users.Email)   // a column
+orm.ArgOpt(Users.Bio)    // a nullable column
+orm.ArgCast(v, "uuid")   // a parameter with an explicit cast
+orm.ArgRaw("now()")      // SQL text, no values in it
+```
+
+The type parameter is a promise you are making about what the function returns,
+and it is not checked against PostgreSQL. Get it wrong and the scan fails — this
+is the escape hatch, and it is honest about being one.
+
+## Raw fragments
+
+When even `Fn` is the wrong shape:
+
+```go
+db.Users.Query().Where(orm.Expr[User]("age(created_at) > interval ?", "1 year"))
+```
+
+`Expr` takes SQL text deliberately. It does not take values formatted into it:
+every `?` becomes a bind parameter, and the fragment's placeholders are counted
+against the arguments given, so a mismatch is a build error rather than a
+confusing server one.
+
+## Worked examples
+
+### A shipping band
+
+`CASE` turning a number into a label, in SQL, so it can be grouped by:
+
+```go
+band := orm.Case(orm.Cond(Parcels.Grams.Lt(500)), orm.Val("letter")).
+    When(orm.Cond(Parcels.Grams.Lt(2000)), orm.Val("small")).
+    When(orm.Cond(Parcels.Grams.Lt(20000)), orm.Val("parcel")).
+    Else(orm.Val("freight"))
+
+var byBand = orm.Project2(
+    band, orm.Count[orm.Composed](),
+    func(b string, n int64) Band { return Band{b, n} },
+)
+
+orm.Compose(pool, byBand).From(Parcels.Source()).GroupBy(band).All(ctx)
+```
+
+Doing this in Go would mean fetching every parcel to count four numbers.
+
+### A display name that is never empty
+
+```go
+name := orm.Coalesce(Members.Nickname, orm.Of(Members.Email))
+```
+
+`Nickname` is nullable, `Email` is not, so the result cannot be NULL and its type
+says `string`. The fallback chain is the proof, not a convention.
+
+### Treating blank as missing
+
+```go
+// An empty note is not a note.
+note := orm.NullIf(orm.Of(Tickets.Note), orm.Val(""))
+```
+
+### Case-insensitive matching that uses an index
+
+```go
+// With an index on lower(email), this can use it; ILike cannot.
+orm.Compose(pool, shape).From(Members.Source()).
+    Where(orm.Eq(orm.Lower(Members.Email), orm.Lower(orm.Val(input))))
+```
+
+### Something PostgreSQL has and this package does not wrap
+
+```go
+// greatest(stock - reserved, 0)
+available := orm.Fn[Item, int32]("greatest",
+    orm.ArgOf(Items.Stock.SubCol(Items.Reserved)),
+    orm.ArgValue(int32(0)))
+
+// A function returning boolean, used as a predicate.
+db.Items.Query().Where(orm.FnPredicate[Item]("pg_try_advisory_lock", orm.ArgOf(Items.ID)))
+```
+
+The type parameter is your promise about the return type. It is not checked
+against PostgreSQL, which is what makes this the escape hatch rather than the
+main road.
+
+
+---
+
+# Window functions
+
+> Ranking, offsets and running totals — computed per row, without collapsing them.
+
+https://ormgo.vercel.app/en/docs/windows/
+
+## What they do
+
+An aggregate collapses rows: `count(*)` over ten rows returns one. A window
+function computes across rows and **keeps every one of them** — each row gets its
+own answer, calculated from the rows around it.
+
+```go
+rn := orm.RowNumber().Over(orm.Window().
+    PartitionBy(orm.Of(Posts.AuthorID)).
+    OrderBy(orm.Of(Posts.CreatedAt).Desc()))
+```
+
+```sql
+row_number() OVER (PARTITION BY author_id ORDER BY created_at DESC)
+```
+
+Read the window as: **restart the numbering for each author**, and **within an
+author, order by newest first**.
+
+## The two halves
+
+A window function is always a function plus a window:
+
+```go
+orm.RowNumber().Over(orm.Window()...)
+//  └ the function        └ the window it looks through
+```
+
+`orm.Window()` builds the window:
+
+| Method | Adds |
+| --- | --- |
+| `PartitionBy(...)` | `PARTITION BY` — restart for each group |
+| `OrderBy(...)` | `ORDER BY` — the order within a partition |
+| `Rows(start, end)` | `ROWS` frame |
+| `Range(start, end)` | `RANGE` frame |
+| `Groups(start, end)` | `GROUPS` frame |
+
+Any of them may be omitted. `Over(orm.Window())` with nothing set is one window
+over the whole result.
+
+## Using one
+
+A window function is an expression, so it goes in a projection like any other:
+
+```go
+type Ranked struct {
+    Title string
+    N     int64
+}
+
+rn := orm.RowNumber().Over(orm.Window().
+    PartitionBy(orm.Of(Posts.AuthorID)).
+    OrderBy(orm.Of(Posts.CreatedAt).Desc()))
+
+shape := orm.Project2(
+    orm.Of(Posts.Title), rn,
+    func(title string, n int64) Ranked { return Ranked{title, n} },
+)
+
+rows, err := orm.Compose(pool, shape).From(Posts.Source()).All(ctx)
+```
+
+## The functions
+
+### Ranking
+
+```go
+orm.RowNumber()    // 1, 2, 3, 4        -> int64
+orm.Rank()         // 1, 2, 2, 4        -> int64  (ties share, then skip)
+orm.DenseRank()    // 1, 2, 2, 3        -> int64  (ties share, no gap)
+orm.PercentRank()  // 0.0 … 1.0         -> float64
+orm.CumeDist()     // cumulative        -> float64
+orm.Ntile(4)       // quartile bucket   -> int32
+```
+
+`Rank` and `DenseRank` differ only in what happens after a tie, which is the
+thing people get wrong: `Rank` leaves a hole, `DenseRank` does not.
+
+### Reaching other rows
+
+```go
+orm.Lag(Posts.Score)         // the previous row's value
+orm.LagN(Posts.Score, 3)     // three rows back
+orm.Lead(Posts.Score)        // the next row's value
+orm.LeadN(Posts.Score, 3)
+orm.FirstValue(Posts.Score)  // first in the frame
+orm.LastValue(Posts.Score)   // last in the frame
+orm.NthValue(Posts.Score, 2) // the second
+```
+
+All of these return the **nullable** form of the column's type. There is no
+previous row for the first row, and no next row for the last — so `Lag` over a
+`NOT NULL` column is still `*T`, and the type says so rather than letting a NULL
+arrive at a destination that cannot hold it.
+
+### Aggregates as windows
+
+Any aggregate becomes a window function with `Over`:
+
+```go
+running := orm.SumInt64[Order, int64](Orders.Total).Over(orm.Window().
+    OrderBy(orm.Of(Orders.Placed).Asc()).
+    Rows(orm.UnboundedPreceding(), orm.CurrentRow()))
+```
+
+```sql
+sum(total) OVER (ORDER BY placed ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+```
+
+That is a running total: every row sees itself and everything before it.
+
+## Frames
+
+A frame narrows which rows of the partition the function sees. The bounds:
+
+```go
+orm.UnboundedPreceding()  // the start of the partition
+orm.Preceding(3)          // three rows back
+orm.CurrentRow()
+orm.Following(3)
+orm.UnboundedFollowing()  // the end of the partition
+```
+
+```go
+// a trailing 7-row average
+orm.AvgInt64[Order, float64](Orders.Total).Over(orm.Window().
+    OrderBy(orm.Of(Orders.Placed).Asc()).
+    Rows(orm.Preceding(6), orm.CurrentRow()))
+```
+
+`Rows` counts rows. `Range` counts by value, so peers with equal `ORDER BY`
+values are included together. `Groups` counts peer groups. They are different
+answers on tied data, which is why all three exist rather than one.
+
+## Where a window function cannot go
+
+Not in `WHERE`, and not in `HAVING`. PostgreSQL evaluates windows after those
+clauses, so the value does not exist yet.
+
+To filter on one, compute it in a derived table and filter outside — which is
+the Top-N recipe:
+
+```go
+rank := orm.Named("rn", orm.RowNumber().Over(orm.Window().
+    PartitionBy(orm.Of(Orders.UserID)).
+    OrderBy(orm.Of(Orders.Placed).Desc())))
+
+ranked := orm.Sub("ranked", orm.Rows(
+    orm.Named("id", orm.Of(Orders.ID)),
+    rank,
+).From(Orders.Source()))
+
+rows, err := orm.Compose(pool, shape).
+    From(ranked).
+    Where(orm.Ref(ranked, rank).Lte(3)).   // the three most recent per user
+    All(ctx)
+```
+
+See [Hard queries](/en/docs/cookbook/insane/) for the whole of that one.
+
+## Worked examples
+
+### A leaderboard with ties handled
+
+```go
+w := orm.Window().OrderBy(orm.Of(Scores.Points).Desc())
+
+var board = orm.Project3(
+    orm.Of(Scores.Player),
+    orm.Rank().Over(w),        // 1, 2, 2, 4 — a tie leaves a hole
+    orm.DenseRank().Over(w),   // 1, 2, 2, 3 — a tie does not
+    func(p string, r, d int64) Row { return Row{p, r, d} },
+)
+
+orm.Compose(pool, board).From(Scores.Source()).All(ctx)
+```
+
+Which one is right depends on whether "third place" should exist when two people
+tie for second. That is a product decision, and the two functions let you make it.
+
+### Change since the previous reading
+
+```go
+w := orm.Window().
+    PartitionBy(orm.Of(Meters.MeterID)).
+    OrderBy(orm.Of(Meters.ReadAt).Asc())
+
+previous := orm.Lag(Meters.Value).Over(w)
+
+var deltas = orm.Project3(
+    orm.Of(Meters.MeterID), orm.Of(Meters.Value), previous,
+    func(id int64, now int32, before *int32) Delta { return Delta{id, now, before} },
+)
+```
+
+`before` is a pointer because the first reading of each meter has nothing behind
+it. Partitioning restarts that at every meter.
+
+### A running balance
+
+```go
+running := orm.SumInt32[orm.Composed, int64](orm.Of(Entries.AmountCents)).
+    Over(orm.Window().
+        PartitionBy(orm.Of(Entries.AccountID)).
+        OrderBy(orm.Of(Entries.PostedAt).Asc()).
+        Rows(orm.UnboundedPreceding(), orm.CurrentRow()))
+```
+
+### A seven-day moving average
+
+```go
+avg := orm.AvgInt64[orm.Composed, float64](orm.Of(Daily.Total)).
+    Over(orm.Window().
+        OrderBy(orm.Of(Daily.Day).Asc()).
+        Rows(orm.Preceding(6), orm.CurrentRow()))
+```
+
+`Rows(6 preceding, current)` is seven rows including this one. Using `Range`
+instead would group days with equal values together, which is not what a moving
+average means.
+
+
+---
+
+# Composition
+
+> Joins, CTEs, derived tables and subqueries — one compiler, one statement.
+
+https://ormgo.vercel.app/en/docs/composition/
+
+## A typed query is a typed source
+
+That is the whole idea. `Sub` makes a query a derived table, `CTE` makes it a `WITH` item, and `Compose` builds a statement over several of them. All of it nests through one compiler, so a statement with a CTE, a derived table, a correlated subquery and a window function has **one parameter list**, numbered in the order the SQL is written.
+
+## Compose and join
+
+```go
+type Row struct {
+    Email string
+    Total *int64
+}
+
+shape := orm.Project2(
+    orm.Of(Users.Email),
+    orm.Opt(Orders.Total),
+    func(email string, total *int64) Row { return Row{email, total} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Users.Source()).
+    LeftJoin(Orders.Source(), orm.Eq(Orders.UserID, Users.ID)).
+    Where(orm.Cond(Users.Active.Eq(true))).
+    OrderBy(orm.Of(Users.Email).Asc()).
+    All(ctx)
+```
+
+Three lifting functions carry typed things into a composed query:
+
+- `orm.Of(col)` — keeps the column's own type.
+- `orm.Opt(col)` — the nullable form, for an outer-joined source.
+- `orm.Cond(pred)` — an entity predicate as a composed one.
+
+## Source-induced nullability
+
+`orders.total` may be `NOT NULL` and still be NULL here, because the join can produce a row where the whole right-hand source is absent. So it widens, and reading it with `Of` is refused:
+
+```text
+select-list expression 2 reads public.orders, which an outer join can leave with
+no row, into a result that cannot hold NULL
+
+an outer join makes every value of that source nullable, whatever the column's
+own constraint says; read it with Opt or OptRef, which widen the result type
+```
+
+That is a build-time refusal, not a scan error discovered on whichever row happened not to match.
+
+## Derived tables
+
+```go
+userID := orm.Named("user_id", orm.Of(Orders.UserID))
+count  := orm.Named("order_count", orm.Count[orm.Composed]())
+
+stats := orm.Sub("post_stats", orm.Rows(userID, count).
+    From(Orders.Source()).
+    GroupBy(orm.Of(Orders.UserID)))
+
+rows, err := orm.Compose(pool, shape).
+    From(Users.Source()).
+    LeftJoin(stats, orm.Eq(orm.Ref(stats, userID), orm.Of(Users.ID))).
+    All(ctx)
+```
+
+`Ref(src, out)` reads a column of a row source, typed by the declaration rather than by a string. `OptRef` is its outer-join form.
+
+## CTEs
+
+```go
+active := orm.CTE("active_users", orm.Rows(
+    orm.Named("id", orm.Of(Users.ID)),
+).From(Users.Source()).Where(orm.Cond(Users.Active.Eq(true))))
+
+rows, err := orm.Compose(pool, shape).
+    With(active).
+    From(active).
+    Join(Orders.Source(), orm.Eq(Orders.UserID, orm.Ref(active, id))).
+    All(ctx)
+```
+
+The returned value is both the declaration, which `With` renders, and the reference, which `From` and the joins take. Aliasing it with `As` gives a second reference to the same item — which is how one CTE is joined to itself.
+
+`Materialized()` and `NotMaterialized()` are available where the planner's estimate is wrong. Leaving it unset leaves the choice to the planner, which is the right default.
+
+## Recursive CTEs
+
+```go
+tree := orm.RecursiveCTE("tree",
+    anchor,     // the non-recursive term
+    recursive,  // the term that refers to "tree"
+)
+```
+
+This is the one place a `UNION` appears inside the ORM, because PostgreSQL's grammar requires it between a recursive CTE's anchor and its recursive term.
+
+## Subqueries
+
+```go
+orm.Exists[User](sub)        // EXISTS (...)
+orm.NotExists[User](sub)
+orm.InSub(Users.ID, sub)          // id IN (SELECT ...)
+orm.Scalar[User, int64](sub) // a scalar subquery — always nullable
+```
+
+A scalar subquery is always nullable, and that is PostgreSQL's semantics rather than caution: no row yields NULL, one row yields the value, and two rows are a run-time error the server raises.
+
+## Scope is checked, sequentially
+
+A reference to an occurrence the statement does not introduce is refused. The rules are SQL's own: a join condition sees the sources written before it and the one it attaches, and nothing to its right.
+
+```go
+// refused: c is joined after the condition that names it
+q.From(a).Join(b, orm.Eq(b.X, c.X)).Join(c, ...)
+```
+
+Validating against the finished set of sources would accept that and let PostgreSQL complain later, in its vocabulary, about a column rather than about the order things were written in.
+
+## One parameter list
+
+```go
+sql, args, _ := q.SQL()
+// ... WHERE a = $1 AND b = $2 ... (SELECT ... WHERE c = $3) ... LIMIT ...
+```
+
+Nested statements share the writer, so numbering continues across every level. Nothing is rendered separately and concatenated.
+
+## Worked examples
+
+### A fleet dashboard
+
+Every vehicle with its last known reading, where a vehicle that has never
+reported still appears — which is the whole reason for the outer join.
+
+```go
+type Status struct {
+    Plate string
+    Fuel  *int32
+}
+
+shape := orm.Project2(
+    orm.Of(Vehicles.Plate),
+    orm.Opt(Readings.FuelPercent),
+    func(plate string, fuel *int32) Status { return Status{plate, fuel} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Vehicles.Source()).
+    LeftJoin(Readings.Source(), orm.Eq(Readings.VehicleID, Vehicles.ID)).
+    Where(orm.Cond(Vehicles.Retired.Eq(false))).
+    OrderBy(orm.Of(Vehicles.Plate).Asc()).
+    All(ctx)
+```
+
+`Opt` rather than `Of`, because a vehicle with no readings produces a row where
+the whole readings source is absent. `*int32` is that fact in the type.
+
+### A catalogue with counts
+
+A derived table computing review counts, joined back so products with none still
+list:
+
+```go
+productID := orm.Named("product_id", orm.Of(Reviews.ProductID))
+reviews   := orm.Named("reviews", orm.Count[orm.Composed]())
+
+stats := orm.Sub("review_stats", orm.Rows(productID, reviews).
+    From(Reviews.Source()).
+    GroupBy(orm.Of(Reviews.ProductID)))
+
+shape := orm.Project2(
+    orm.Of(Products.Name),
+    orm.OptRef(stats, reviews),
+    func(name string, n *int64) Listing { return Listing{name, n} },
+)
+
+rows, err := orm.Compose(pool, shape).
+    From(Products.Source()).
+    LeftJoin(stats, orm.Eq(orm.Ref(stats, productID), orm.Of(Products.ID))).
+    All(ctx)
+```
+
+`OptRef` is `Ref` for a source an outer join can leave absent. The count inside
+the derived table can never be NULL; read through this join it can.
+
+### A cohort, named once
+
+A CTE is worth it when the same set is needed twice, or when naming it makes the
+statement readable:
+
+```go
+signups := orm.CTE("recent_signups", orm.Rows(
+    orm.Named("id", orm.Of(Accounts.ID)),
+).From(Accounts.Source()).
+    Where(orm.Cond(Accounts.CreatedAt.Gte(weekStart))))
+
+rows, err := orm.Compose(pool, shape).
+    With(signups).
+    From(signups).
+    Join(Invoices.Source(), orm.Eq(Invoices.AccountID, orm.Ref(signups, id))).
+    All(ctx)
+```
+
+
+---
+
+# UNION ALL
+
+> Composing two typed SELECTs into one, with duplicates kept.
+
+https://ormgo.vercel.app/en/docs/union-all/
+
+## Scope
+
+v1 composes `UNION ALL` and nothing else. `UNION`, `INTERSECT` and `EXCEPT` are not part of it, and the compiler refuses any other set operation rather than leaving a gap somebody discovers at run time.
+
+`UNION ALL` keeps duplicate rows. That is the operation: if you wanted them removed you wanted a different one.
+
+## Writing one
+
+A branch is any typed query: an entity `Query`, a `SelectQuery`, a
+`ComposedQuery`, or another `UnionQuery`. Every branch produces the same Go
+result type, and the type argument is written out because Go cannot infer it
+from an interface a branch happens to satisfy.
+
+```go
+type Row struct {
+    ID    int64
+    Label string
+}
+
+// One shape, used by both branches. The names matter: a compound is ordered by
+// output name, so declare them with As.
+shape := orm.Project2(
+    orm.Of(Users.ID).As("thing_id"),
+    orm.Of(Users.Email).As("label"),
+    func(id int64, label string) Row { return Row{ID: id, Label: label} },
+)
+
+fromUsers := orm.Compose(pool, shape).From(Users.Source())
+fromPosts := orm.Compose(pool, shape).From(Posts.Source())
+
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).All(ctx)
+```
+
+```sql
+SELECT "users"."id" AS "thing_id", "users"."email" AS "label" FROM "public"."users"
+UNION ALL
+SELECT "posts"."id" AS "thing_id", "posts"."title" AS "label" FROM "public"."posts"
+```
+
+`All`, `One`, `Rows` and `SQL` work as they do on any other query. When the
+branches were built without an executor, give the compound one with `Using`:
+
+```go
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).Using(pool).All(ctx)
+```
+
+## Ordering the result
+
+`OrderBy` on a compound takes an **output declaration**, not a column — because a
+compound's `ORDER BY` may name a column of the result and nothing else:
+
+```go
+label := orm.Named("label", orm.Of(Users.Email))
+
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).
+    OrderBy(label.Asc()).
+    Limit(20).
+    All(ctx)
+```
+
+Passing a column ordering instead does not compile:
+
+```go
+.OrderBy(Users.ID.Asc())          // does not compile
+.OrderBy(orm.Of(Users.ID).Asc())  // does not compile either
+```
+
+That is deliberate. Both would render a term PostgreSQL refuses outright, and
+`OutputOrder` exists to make them unwritable rather than to catch them later.
+
+## The rules
+
+Branches must have **exactly** compatible output shapes — same column count, same order, same Go result types, same nullability. The v1 contract is deliberately stricter than PostgreSQL's implicit coercion:
+
+- `int32` and `int64` are not merged.
+- `uuid.UUID` and `string` are not merged.
+- A non-nullable and a nullable column are not merged.
+
+PostgreSQL could find a common type for some of those. Letting it would make the Go result type depend on a coercion rule nobody reads, so the answer is a refusal with the mismatch named.
+
+## Branch-local clauses
+
+A branch may carry its own `ORDER BY`, `LIMIT` and `OFFSET`, and it means what it says:
+
+```sql
+(SELECT ... ORDER BY placed DESC LIMIT 2)
+UNION ALL
+(SELECT ... ORDER BY placed DESC LIMIT 2)
+LIMIT 3
+```
+
+The parentheses are the grammar, not a style. Written bare, PostgreSQL attaches those clauses to the whole compound — so a branch that looks limited is not, and the rows you get are not the rows you asked for. The compiler parenthesises a branch exactly when it carries one of them.
+
+## Compound clauses
+
+`ORDER BY`, `LIMIT` and `OFFSET` on the compound apply to the complete result, after both branches:
+
+```sql
+SELECT ... UNION ALL SELECT ... ORDER BY "email" ASC LIMIT 10
+```
+
+A compound's `ORDER BY` may name an **output column** and nothing else. That is PostgreSQL's rule: a qualified reference gets `missing FROM-clause entry`, and an expression gets `invalid UNION/INTERSECT/EXCEPT ORDER BY clause`. Without an outer `ORDER BY`, nothing about the order of the result is promised.
+
+## Placeholders are global
+
+The branches share one parameter list:
+
+```sql
+SELECT ... WHERE email = $1
+UNION ALL
+SELECT ... WHERE label = $2
+```
+
+Restarting numbering in the second branch would produce SQL PostgreSQL accepts and binds the wrong values into — which is why this is the property the implementation leads with.
+
+## Scope is per branch
+
+A branch sees the compound's `WITH` items and its own sources. It does not see the other branch's:
+
+A branch is not a scope-sharing mechanism, and that is structural — each branch pushes its own scope frame.
+
+## Nesting
+
+`A UNION ALL B UNION ALL C` is one operation over three inputs, so it renders flat. Building it as `A UNION ALL (B UNION ALL C)` parenthesises the inner one, because at that point you asked for it — and because the inner compound's own `ORDER BY` and `LIMIT` would otherwise bind to the outer.
+
+## One statement
+
+A compound is one SQL statement. It is never two queries whose rows are appended in Go — that would lose the compound `ORDER BY`, lose `LIMIT`, and turn one round trip into two.
+
+## Worked examples
+
+### One activity feed from three tables
+
+Comments, likes and follows, interleaved by time. The projection is what makes
+them the same shape:
+
+```go
+type Item struct {
+    At   time.Time
+    Kind string
+    Text string
+}
+
+feed := func(at orm.Expression[time.Time, *time.Time], kind string,
+    text orm.Expression[string, *string]) orm.Projection[orm.Composed, Item] {
+    return orm.Project3(at, orm.Val(kind), text,
+        func(a time.Time, k, t string) Item { return Item{a, k, t} })
+}
+
+when := orm.Named("at", orm.Of(Comments.PostedAt))
+
+rows, err := orm.UnionAll[Item](
+    orm.Compose(pool, feed(orm.Of(Comments.PostedAt), "comment", orm.Of(Comments.Body))).
+        From(Comments.Source()),
+    orm.Compose(pool, feed(orm.Of(Likes.LikedAt), "like", orm.Of(Likes.Target))).
+        From(Likes.Source()),
+    orm.Compose(pool, feed(orm.Of(Follows.At), "follow", orm.Of(Follows.Handle))).
+        From(Follows.Source()),
+).OrderBy(when.Desc()).Limit(50).All(ctx)
+```
+
+Three tables, one statement, one `ORDER BY` over the whole result. Fetching each
+separately and merging in Go would need all three complete before it could take
+the newest fifty.
+
+### Live rows and archived rows
+
+The same shape from two tables that are the same table split by age:
+
+```go
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Orders.Source()).
+        Where(orm.Cond(Orders.PlacedAt.Gte(cutoff))),
+    orm.Compose(pool, shape).From(ArchivedOrders.Source()).
+        Where(orm.Cond(ArchivedOrders.PlacedAt.Lt(cutoff))),
+).All(ctx)
+```
+
+### Branch limits and a compound limit
+
+```go
+// The two newest of each, then the three newest overall.
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Inbox.Source()).
+        OrderBy(orm.Of(Inbox.At).Desc()).Limit(2),
+    orm.Compose(pool, shape).From(Archive.Source()).
+        OrderBy(orm.Of(Archive.At).Desc()).Limit(2),
+).OrderBy(when.Desc()).Limit(3).All(ctx)
+```
+
+Four rows are fetched and three are returned. The branch limits are parenthesised
+so they stay branch limits.
+
+
+---
+
+# Writing data
+
+> Insert, update, delete and COPY — all of it explicit.
+
+https://ormgo.vercel.app/en/docs/writing/
+
+## Insert
+
+```go
+user, err := db.Users.Insert(ctx, User{
+    Email: "a@example.com",
+    Active: true,
+})
+// user.ID is populated from RETURNING
+```
+
+Many at once:
+
+```go
+users, err := db.Users.InsertMany(ctx, []User{u1, u2, u3})
+```
+
+## Defaults
+
+A Go zero value is a value. Asking for the column's default is separate and explicit:
+
+```go
+db.Users.Insert(ctx, User{}, orm.Default(Users.Active, Users.CreatedAt))
+```
+
+The named columns are left out of the `INSERT` entirely, so the column's `DEFAULT` applies — or its sequence, or NULL for a nullable column with no default.
+
+## Update
+
+```go
+n, err := db.Users.Update(ctx).
+    Set(Users.Active, false).
+    Where(Users.CreatedAt.Lt(cutoff)).
+    Exec(ctx)
+```
+
+An update with no `WHERE` is refused:
+
+```go
+_, err := db.Users.Update(ctx).Set(Users.Active, false).Exec(ctx)
+// errors.Is(err, orm.ErrMissingWhere)
+```
+
+Unless you say every row was meant:
+
+```go
+db.Users.Update(ctx).Set(Users.Active, false).All().Exec(ctx)
+```
+
+Set from an expression rather than a value:
+
+```go
+db.Orders.Update(ctx).
+    SetExpr(Orders.Total, Orders.Net.AddCol(Orders.Tax)).
+    Where(Orders.ID.Eq(id))
+```
+
+## Delete
+
+```go
+n, err := db.Users.Delete(ctx).Where(Users.ID.Eq(id)).Exec(ctx)
+```
+
+Same `ErrMissingWhere` rule, for the same reason.
+
+## Upsert
+
+```go
+db.Users.Insert(ctx, user,
+    orm.OnConflict(Users.Email).DoUpdateSet(
+        Users.Active.Set(true),
+    ),
+)
+
+db.Users.Insert(ctx, user, orm.OnConflict(Users.Email).DoNothing())
+```
+
+The conflict target is a column list PostgreSQL matches against; `DO UPDATE` sees the row that conflicted and `EXCLUDED`.
+
+## Upsert, in detail
+
+`OnConflict` names the columns PostgreSQL matches a conflict against — usually a
+unique constraint's columns.
+
+```go
+// Do nothing when it is already there.
+db.Users.Insert(ctx, user, orm.OnConflict(Users.Email).DoNothing())
+
+// Take the incoming row's values for the named columns.
+db.Users.Insert(ctx, user, orm.OnConflict(Users.Email).DoUpdate(Users.Name, Users.Seen))
+
+// Or set them yourself.
+db.Users.Insert(ctx, user, orm.OnConflict(Users.Email).DoUpdateSet(
+    Users.Seen.Set(time.Now()),
+    Users.Hits.SetExpr(Users.Hits.Add(1)),
+))
+```
+
+`DoUpdate` is the common case and reads as "these columns take the new values".
+`DoUpdateSet` is for when the new value is computed — incrementing a counter,
+keeping the larger of two numbers, appending to an array.
+
+A partial index needs the same predicate on the conflict clause:
+
+```go
+orm.OnConflict(Users.Email).Where(Users.Active.Eq(true)).DoNothing()
+```
+
+## RETURNING
+
+PostgreSQL can hand back the rows a write touched. This library uses it in three
+different ways, and the difference is worth knowing because two of them are
+automatic and one is not.
+
+### Insert always returns
+
+```go
+user, err := db.Users.Insert(ctx, User{Email: "a@example.com"})
+// user.ID is set; so is CreatedAt, and anything else the database filled in
+```
+
+That is why `Insert` returns `(E, error)` rather than an error alone. An
+identity key, a `DEFAULT now()`, a generated column and a trigger's edits all
+arrive in the returned value, so the struct you get back is the row as it exists
+— not the struct you sent.
+
+`InsertMany` does the same for a slice, in order:
+
+```go
+users, err := db.Users.InsertMany(ctx, []User{a, b, c})
+// users[1].ID is b's key
+```
+
+The column list is always explicit. A `RETURNING *` would decide the scan order
+at the server, where the generated scanner cannot see it.
+
+### Upsert returns the surviving row
+
+```go
+user, err := db.Users.Insert(ctx, incoming,
+    orm.OnConflict(Users.Email).DoUpdate(Users.Name, Users.Seen))
+```
+
+Whether it inserted or updated, what comes back is the row that is now in the
+table. That is the usual reason to reach for `DoUpdate` over `DoNothing`:
+`DoNothing` on a conflict returns **no row**, so the value you get is the zero
+entity and you cannot tell "already there" from "just written" by looking at it.
+
+### Update and delete do not, unless you ask
+
+`Exec` returns a count:
+
+```go
+n, err := db.Users.Update(ctx).
+    Set(Users.Active, false).
+    Where(Users.CreatedAt.Lt(cutoff)).
+    Exec(ctx)
+// n is how many rows changed
+```
+
+A count answers "how many". When you need "which", wrap the builder:
+
+```go
+updated, err := orm.UpdateReturningEntity(
+    db.Users.Update(ctx).Set(Users.Active, false).Where(Users.CreatedAt.Lt(cutoff)),
+).All(ctx)
+// []User — every row that matched, as it is after the update
+```
+
+```go
+deleted, err := orm.DeleteReturningEntity(
+    db.Users.Delete(ctx).Where(Users.ID.Eq(id)),
+).One(ctx)
+// the row as it was, immediately before it stopped existing
+```
+
+Note the difference in tense. An update returns the **new** values; a delete
+returns the row that is now gone. Both are the only chance you get: after the
+statement, one of them cannot be queried and the other no longer holds the old
+values.
+
+### Returning a shape rather than the entity
+
+When you only need two columns of what changed:
+
+```go
+type Changed struct {
+    ID    int64
+    Email string
+}
+
+var changed = orm.Project2(
+    Users.ID, Users.Email,
+    func(id int64, email string) Changed { return Changed{id, email} },
+)
+
+rows, err := orm.UpdateReturning(
+    db.Users.Update(ctx).Set(Users.Active, false).Where(cond),
+    changed,
+).All(ctx)
+// []Changed
+```
+
+`DeleteReturning` takes a projection the same way.
+
+### The terminals
+
+A `Returning` offers three, and no others:
+
+| Method | For |
+| --- | --- |
+| `All(ctx)` | every row the write touched |
+| `One(ctx)` | exactly one, or `ErrNotFound`; more than one is an error |
+| `SQL()` | the statement and its arguments, without running it |
+
+There is no `Exec` on a `Returning`, because a statement whose rows you asked
+for and then discarded is a statement that wanted `Exec` in the first place.
+
+### It is still a write
+
+`ErrMissingWhere` applies exactly as it does without `RETURNING` — wrapping an
+update does not make an unconditional one safe:
+
+```go
+_, err := orm.UpdateReturningEntity(
+    db.Users.Update(ctx).Set(Users.Active, false),
+).All(ctx)
+// errors.Is(err, orm.ErrMissingWhere)
+```
+
+And it is one statement. The rows come back from the write itself, not from a
+`SELECT` afterwards — which is what makes them the rows that write touched, even
+under concurrency, rather than the rows that match now.
+
+## COPY
+
+For bulk loading, `COPY` is an order of magnitude faster than `INSERT`:
+
+```go
+n, err := db.Events.CopyFrom(ctx, events)
+```
+
+Streaming, so the rows never all exist at once:
+
+```go
+n, err := db.Events.CopyFromSeq(ctx, func(yield func(Event, error) bool) {
+    for scanner.Scan() {
+        ev, err := parse(scanner.Text())
+        if !yield(ev, err) {
+            return
+        }
+    }
+})
+```
+
+A subset of columns:
+
+```go
+n, err := orm.CopyColumns(ctx, db.Events, events, Events.ID, Events.Kind)
+```
+
+A failing `COPY` fails as one statement — no part of it is applied. If it has to succeed together with other work, run it in a transaction.
+
+## Worked examples
+
+### An import that runs twice
+
+Idempotent by construction: the second run updates rather than duplicating.
+
+```go
+for _, row := range parsed {
+    _, err := db.Products.Insert(ctx, row,
+        orm.OnConflict(Products.SKU).DoUpdate(
+            Products.Name, Products.PriceCents, Products.UpdatedAt))
+    if err != nil {
+        return err
+    }
+}
+```
+
+For a large file, one statement per chunk instead of per row:
+
+```go
+for chunk := range slices.Chunk(parsed, 1000) {
+    if _, err := db.Products.InsertMany(ctx, chunk,
+        orm.OnConflict(Products.SKU).DoUpdate(Products.PriceCents)); err != nil {
+        return err
+    }
+}
+```
+
+### A booking that must not double-sell
+
+The write and the check are one statement, so nothing can slip between them:
+
+```go
+seat, err := db.Seats.Update(ctx).
+    Set(Seats.HeldBy, customerID).
+    Set(Seats.HeldUntil, time.Now().Add(10*time.Minute)).
+    Where(Seats.ID.Eq(seatID)).
+    Where(Seats.HeldBy.IsNull()).
+    Exec(ctx)
+if seat == 0 {
+    return ErrAlreadyHeld  // somebody else won
+}
+```
+
+The `HeldBy.IsNull()` in the `WHERE` is the lock. A read-then-write would have a
+gap; this does not.
+
+### A retention job
+
+Delete, and keep what was deleted for the audit log:
+
+```go
+gone, err := orm.DeleteReturningEntity(
+    db.Sessions.Delete(ctx).Where(Sessions.ExpiresAt.Lt(time.Now())),
+).All(ctx)
+
+for _, s := range gone {
+    recordAudit("session.expired", s.ID, s.UserID)
+}
+```
+
+### A counter that never reads first
+
+```go
+db.PageViews.Update(ctx).
+    SetExpr(PageViews.Hits, PageViews.Hits.Add(1)).
+    Where(PageViews.Path.Eq(path)).
+    Exec(ctx)
+```
+
+Reading the row, adding one in Go and writing it back loses increments under
+concurrency. This one cannot.
+
+
+---
+
+# Transactions
+
+> One callback, one transaction, no hidden state.
+
+https://ormgo.vercel.app/en/docs/transactions/
+
+## The shape
+
+```go
+err := db.Tx(ctx, func(tx *domain.DB) error {
+    user, err := tx.Users.Insert(ctx, User{Email: email})
+    if err != nil {
+        return err
+    }
+    _, err = tx.Orders.Insert(ctx, Order{UserID: user.ID})
+    return err
+})
+```
+
+The callback receives a `DB` bound to the transaction. The one it was called on is untouched, so there is no ambient "current transaction" and no way to accidentally write outside it.
+
+Returning nil commits. Returning an error rolls back. A panic rolls back and re-panics. **Nothing is retried** — a retry policy depends on what the work was, and the library does not know.
+
+## Options
+
+```go
+err := db.TxOptions(ctx, pgx.TxOptions{
+    IsoLevel:   pgx.Serializable,
+    AccessMode: pgx.ReadWrite,
+}, func(tx *domain.DB) error {
+    return nil
+})
+```
+
+## Serialization failures
+
+At `Serializable`, PostgreSQL may abort a transaction that would break serializability. That is not an error to log — it is an instruction to try again:
+
+```go
+for attempt := range 3 {
+    err := db.TxOptions(ctx, opts, work)
+    var pge *pgconn.PgError
+    if errors.As(err, &pge) && pge.Code == "40001" {
+        continue // serialization_failure
+    }
+    return err
+}
+```
+
+The retry loop is yours because the backoff, the cap and whether retrying is safe at all are yours.
+
+## Without generated code
+
+`RunTx` takes any executor:
+
+```go
+err := orm.RunTx(ctx, pool, func(ex orm.Executor) error {
+    repo := orm.NewRepo(ex, &meta)
+    return nil
+})
+```
+
+## What a transaction is not
+
+It is not a unit of work that tracks what you changed. There is no dirty tracking and no flush: a statement runs when you call it. That makes the statement order in the log the statement order in your code, which is the property you want at 3am.
+
+## Worked examples
+
+### A transfer between accounts
+
+Both legs or neither. The classic, and the reason the callback shape exists:
+
+```go
+err := db.Tx(ctx, func(tx *domain.DB) error {
+    if _, err := tx.Accounts.Update(ctx).
+        SetExpr(Accounts.Balance, Accounts.Balance.Sub(amount)).
+        Where(Accounts.ID.Eq(from)).
+        Where(Accounts.Balance.Gte(amount)).   // refuses to go negative
+        Exec(ctx); err != nil {
+        return err
+    }
+    _, err := tx.Accounts.Update(ctx).
+        SetExpr(Accounts.Balance, Accounts.Balance.Add(amount)).
+        Where(Accounts.ID.Eq(to)).
+        Exec(ctx)
+    return err
+})
+```
+
+The balance check is in the `WHERE` rather than in Go, so an overdraft is an
+update that matched no rows rather than a race.
+
+### An order and its lines
+
+```go
+err := db.Tx(ctx, func(tx *domain.DB) error {
+    order, err := tx.Orders.Insert(ctx, Order{CustomerID: id})
+    if err != nil {
+        return err
+    }
+    for i := range lines {
+        lines[i].OrderID = order.ID   // the key the insert handed back
+    }
+    _, err = tx.OrderLines.InsertMany(ctx, lines)
+    return err
+})
+```
+
+### A worker claiming a batch
+
+`SKIP LOCKED` is what lets two workers run the same query and never collide:
+
+```go
+err := db.Tx(ctx, func(tx *domain.DB) error {
+    jobs, err := tx.Jobs.Query().
+        Where(Jobs.State.Eq("queued")).
+        OrderBy(Jobs.Priority.Desc(), Jobs.QueuedAt.Asc()).
+        Limit(20).
+        Lock(orm.ForUpdateStrong, orm.SkipLocked()).
+        All(ctx)
+    if err != nil {
+        return err
+    }
+    for _, j := range jobs {
+        if _, err := tx.Jobs.Update(ctx).
+            Set(Jobs.State, "running").
+            Where(Jobs.ID.Eq(j.ID)).
+            Exec(ctx); err != nil {
+            return err
+        }
+    }
+    return nil
+})
+```
+
+
+---
+
+# Query recipes
+
+> The everyday shapes, written out — filtering, paging, aggregation, upserts, search.
+
+https://ormgo.vercel.app/en/docs/cookbook/queries/
+
+Every recipe here is complete enough to paste. `db` is the generated `*domain.DB`; `Users`, `Orders` and friends are the generated descriptors.
+
+## Filtering
+
+### Optional filters from a request
+
+```go
+func (s *Store) Search(ctx context.Context, f Filter) ([]User, error) {
+    q := s.db.Users.Query()
+    if f.Email != "" {
+        q = q.Where(Users.Email.ILike("%" + f.Email + "%"))
+    }
+    if f.Active != nil {
+        q = q.Where(Users.Active.Eq(*f.Active))
+    }
+    if !f.Since.IsZero() {
+        q = q.Where(Users.CreatedAt.Gte(f.Since))
+    }
+    return q.OrderBy(Users.CreatedAt.Desc()).Limit(f.Limit).All(ctx)
+}
+```
+
+No filters means no `WHERE` clause at all, not `WHERE TRUE`.
+
+### Either/or
+
+```go
+db.Users.Query().Where(orm.Or(
+    Users.Email.ILike("%@example.com"),
+    Users.Email.ILike("%@example.org"),
+))
+```
+
+### Anything but
+
+```go
+db.Users.Query().Where(orm.Not(Users.ID.In(banned...)))
+```
+
+### NULL versus empty
+
+```go
+db.Users.Query().Where(Users.Bio.IsNull())            // never set
+db.Users.Query().Where(Users.Bio.Eq(""))              // set to empty
+db.Users.Query().Where(orm.Or(
+    Users.Bio.IsNull(), Users.Bio.Eq(""),
+))                                                     // either
+```
+
+## Paging
+
+### Offset paging
+
+```go
+db.Users.Query().OrderBy(Users.ID.Asc()).Limit(20).Offset(page * 20)
+```
+
+### Keyset paging
+
+Correct on a moving table, and it stays fast at page 5000:
+
+```go
+q := db.Users.Query().OrderBy(Users.CreatedAt.Desc(), Users.ID.Desc()).Limit(20)
+if cursor != nil {
+    q = q.Where(orm.Or(
+        Users.CreatedAt.Lt(cursor.At),
+        orm.And(Users.CreatedAt.Eq(cursor.At), Users.ID.Lt(cursor.ID)),
+    ))
+}
+```
+
+### Total plus page, one round trip each
+
+```go
+total, err := db.Users.Query().Where(cond).Count(ctx)
+page,  err := db.Users.Query().Where(cond).Limit(20).All(ctx)
+```
+
+## Aggregation
+
+### Count per group
+
+```go
+type ByStatus struct {
+    Status string
+    N      int64
+}
+
+var byStatus = orm.Project2(
+    Orders.Status, orm.Count[Order](),
+    func(s string, n int64) ByStatus { return ByStatus{s, n} },
+)
+
+rows, _ := orm.Select(db.Orders, byStatus).
+    GroupBy(Orders.Status).
+    OrderBy(Orders.Status.Asc()).
+    All(ctx)
+```
+
+### Only the busy groups
+
+```go
+orm.Select(db.Orders, byStatus).
+    GroupBy(Orders.Status).
+    Having(orm.Count[Order]().Gt(100))
+```
+
+### Aggregates over no rows
+
+```go
+var maxShape = orm.Project1(orm.Max(Orders.Total), func(v *int64) *int64 { return v })
+// nil when there are no rows — max over nothing is NULL, and the type says so
+```
+
+## Relations
+
+### The five most recent per parent
+
+One statement, not one per user:
+
+```go
+db.Users.Query().
+    With(Users.Orders.OrderBy(Orders.Placed.Desc()).Limit(5)).
+    All(ctx)
+```
+
+### Parents that have a child
+
+```go
+db.Users.Query().Where(Users.Orders.Any(Orders.Status.Eq("paid")))
+```
+
+### Parents that have none
+
+```go
+db.Users.Query().Where(Users.Orders.None())
+```
+
+### Deep loading
+
+```go
+db.Users.Query().
+    With(Users.Orders.With(Orders.Items.With(Items.Product))).
+    All(ctx)
+// four statements regardless of row counts
+```
+
+## Writing
+
+### Upsert on a natural key
+
+```go
+db.Users.Insert(ctx, user,
+    // Take the new row's values for these columns.
+    orm.OnConflict(Users.Email).DoUpdate(Users.Name, Users.UpdatedAt),
+)
+```
+
+### Increment without reading first
+
+```go
+db.Counters.Update(ctx).
+    SetExpr(Counters.Hits, Counters.Hits.Add(1)).
+    Where(Counters.Key.Eq(key)).
+    Exec(ctx)
+```
+
+### Bulk load
+
+```go
+n, err := db.Events.CopyFrom(ctx, batch)
+```
+
+### Claim work safely
+
+The queue pattern, with two workers never taking the same row:
+
+```go
+err := db.Tx(ctx, func(tx *domain.DB) error {
+    jobs, err := tx.Jobs.Query().
+        Where(Jobs.Status.Eq("pending")).
+        OrderBy(Jobs.Created.Asc()).
+        Limit(10).
+        Lock(orm.ForUpdateStrong, orm.SkipLocked()).
+        All(ctx)
+    if err != nil {
+        return err
+    }
+    for _, j := range jobs {
+        if _, err := tx.Jobs.Update(ctx).
+            Set(Jobs.Status, "running").
+            Where(Jobs.ID.Eq(j.ID)).
+            Exec(ctx); err != nil {
+            return err
+        }
+    }
+    return nil
+})
+```
+
+## JSON and arrays
+
+These are free functions producing a `Predicate[Composed]`, so they go in a
+composed query. `orm.Opt` lifts a non-nullable column:
+
+```go
+meta := orm.Opt(Users.Meta)
+tags := orm.Opt(Users.Tags)
+
+orm.Compose(pool, shape).From(Users.Source()).Where(
+    orm.JSONHasKey(meta, "plan"),
+)
+
+orm.Compose(pool, shape).From(Users.Source()).Where(
+    orm.JSONContains(meta, orm.Val(map[string]any{"plan": "pro"})),
+)
+
+// the text at a path, cast to something comparable
+tier := orm.CastNull(orm.JSONPathText(meta, "billing", "tier"), orm.Text)
+
+orm.Compose(pool, shape).From(Users.Source()).Where(
+    orm.ArrayContains(tags, orm.Val([]string{"go", "sql"})),
+    orm.ArrayOverlaps(tags, orm.Val([]string{"go"})),
+)
+```
+
+## Full text search
+
+```go
+q := orm.PlainToTSQuery(orm.English, input)
+
+type Hit struct {
+    ID    int64
+    Title string
+    Rank  float32
+}
+
+var hits = orm.Project3(
+    Docs.ID, Docs.Title, orm.TSRank(Docs.Search, q),
+    func(id int64, title string, rank float32) Hit { return Hit{id, title, rank} },
+)
+
+orm.Select(db.Docs, hits).
+    Where(orm.Matches(Docs.Search, q)).
+    OrderBy(orm.TSRank(Docs.Search, q).Desc()).
+    Limit(20).
+    All(ctx)
+```
+
+## Time and ranges
+
+```go
+db.Bookings.Query().Where(Bookings.During.Overlaps(
+    orm.ClosedOpen(from, to),
+))
+
+db.Events.Query().Where(Events.At.Between(dayStart, dayEnd))
+```
+
+## Escape hatches
+
+### A fragment inside a built query
+
+```go
+db.Users.Query().Where(
+    orm.Expr[User]("age(created_at) > interval ?", "1 year"),
+)
+```
+
+### A whole statement, with the generated scanner kept
+
+```go
+users, err := orm.Raw[User](db.Users, `
+    SELECT * FROM users
+    WHERE ctid = ANY (?)
+`, ctids).All(ctx)
+```
+
+Both take SQL text deliberately. Neither takes values formatted into it.
+
+
+---
+
+# Hard queries
+
+> The ones people reach for raw SQL to write — composed, typed, and still one statement.
+
+https://ormgo.vercel.app/en/docs/cookbook/insane/
+
+Each of these is one SQL statement with one parameter list. None of them is assembled from strings.
+
+## Top-N per group
+
+The classic. A window function inside a derived table, filtered outside it — because a window function cannot appear in a `WHERE`.
+
+```go
+rank := orm.Named("rn", orm.RowNumber[orm.Composed]().
+    PartitionBy(orm.Of(Orders.UserID)).
+    OrderBy(orm.Of(Orders.Placed).Desc()))
+
+ranked := orm.Sub("ranked", orm.Rows(
+    orm.Named("id", orm.Of(Orders.ID)),
+    orm.Named("user_id", orm.Of(Orders.UserID)),
+    orm.Named("placed", orm.Of(Orders.Placed)),
+    rank,
+).From(Orders.Source()))
+
+rows, err := orm.Compose(pool, shape).
+    From(ranked).
+    Where(orm.Ref(ranked, rank).Lte(3)).
+    OrderBy(orm.Ref(ranked, userID).Asc()).
+    All(ctx)
+```
+
+## Running total
+
+```go
+running := orm.Named("running", orm.SumInt64[orm.Composed, int64](orm.Of(Orders.Total)).Over(orm.Window().
+    OrderBy(orm.Of(Orders.Placed).Asc()).
+    Rows(orm.UnboundedPreceding(), orm.CurrentRow())))
+```
+
+## Gaps and islands
+
+Consecutive runs of activity, found by the difference between a row number and the date.
+
+```go
+grp := orm.Named("grp", orm.Sub(
+    orm.Of(Events.Day),
+    orm.RowNumber[orm.Composed]().OrderBy(orm.Of(Events.Day).Asc()),
+))
+
+islands := orm.Sub("islands", orm.Rows(
+    orm.Named("day", orm.Of(Events.Day)),
+    grp,
+).From(Events.Source()))
+
+// then group by grp and take min(day), max(day)
+```
+
+## Recursive hierarchy
+
+An org chart, to any depth, in one statement:
+
+```go
+anchor := orm.Rows(
+    orm.Named("id", orm.Of(Employees.ID)),
+    orm.Named("manager_id", orm.Opt(Employees.ManagerID)),
+    orm.Named("depth", orm.Val(0)),
+).From(Employees.Source()).Where(orm.Cond(Employees.ManagerID.IsNull()))
+
+tree := orm.RecursiveCTE("tree", anchor, func(self *orm.Source) orm.Term {
+    return orm.Rows(
+        orm.Named("id", orm.Of(Employees.ID)),
+        orm.Named("manager_id", orm.Opt(Employees.ManagerID)),
+        orm.Named("depth", orm.Ref(self, depth).Add(1)),
+    ).From(Employees.Source()).
+        Join(self, orm.Eq(Employees.ManagerID, orm.Ref(self, id)))
+})
+```
+
+`UNION` appears here and only here — PostgreSQL's grammar requires it between a recursive CTE's anchor and its recursive term. It is not the general set-composition feature; that is [UNION ALL](/en/docs/union-all/).
+
+## Correlated subquery in the select list
+
+The most recent order per user, without a join:
+
+```go
+last := orm.Scalar[User, time.Time](
+    db.Orders.Query().
+        Where(orm.Eq(Orders.UserID, Users.ID)).
+        OrderBy(Orders.Placed.Desc()).
+        Limit(1),
+)
+
+var shape = orm.Project2(
+    Users.Email, last,
+    func(email string, at *time.Time) Row { return Row{email, at} },
+)
+```
+
+A scalar subquery is always nullable, because no row yields NULL. The type says so.
+
+## Anti-join two ways
+
+```go
+// NOT EXISTS — usually the planner's favourite
+db.Users.Query().Where(orm.NotExists(
+    db.Orders.Query().Where(orm.Eq(Orders.UserID, Users.ID)),
+))
+
+// LEFT JOIN ... IS NULL, when you also want columns from the right side
+orm.Compose(pool, shape).
+    From(Users.Source()).
+    LeftJoin(Orders.Source(), orm.Eq(Orders.UserID, Users.ID)).
+    Where(orm.Opt(Orders.ID).IsNull())
+```
+
+## Lateral join
+
+The two most recent orders per user, with the subquery correlating to the row on its left:
+
+```go
+recent := orm.Sub("recent", orm.Rows(
+    orm.Named("id", orm.Of(Orders.ID)),
+    orm.Named("placed", orm.Of(Orders.Placed)),
+).From(Orders.Source()).
+    Where(orm.Cond(orm.Eq(Orders.UserID, Users.ID))).
+    OrderBy(orm.Of(Orders.Placed).Desc()).
+    Limit(2))
+
+orm.Compose(pool, shape).
+    From(Users.Source()).
+    LeftJoinLateral(recent)
+```
+
+## Pivot
+
+Counts by status, as columns rather than rows:
+
+```go
+var pivot = orm.Project3(
+    Orders.UserID,
+    orm.Count[Order]().Filter(Orders.Status.Eq("paid")),
+    orm.Count[Order]().Filter(Orders.Status.Eq("refunded")),
+    func(id int64, paid, refunded int64) Pivot { return Pivot{id, paid, refunded} },
+)
+
+orm.Select(db.Orders, pivot).GroupBy(Orders.UserID)
+```
+
+`FILTER` beats `CASE WHEN` here: it says what it means and the planner reads it better.
+
+## Set composition across relations
+
+A table, a view and a materialized view in one result — legal because the projections are identical:
+
+```go
+shape := orm.Project2(/* uuid, text */)
+
+email := orm.Named("email", orm.Of(Users.Email))
+
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Users.Source()),
+    orm.Compose(pool, shape).From(ActiveUsers.Source()),
+    orm.Compose(pool, shape).From(UserSummaries.Source()),
+).OrderBy(email.Asc()).Limit(50).All(ctx)
+```
+
+No special handling by source kind. A read source is a read source.
+
+## Self-join through an alias
+
+```go
+mgr := Employees.As("mgr")
+
+orm.Compose(pool, shape).
+    From(Employees.Source()).
+    LeftJoin(mgr.Source(), orm.Eq(mgr.ID, Employees.ManagerID))
+```
+
+`As` returns a second source, and a descriptor built from one cannot be used against the other. That is what makes a self-join safe rather than a naming exercise.
+
+## Batched upsert of a whole set
+
+```go
+err := db.Tx(ctx, func(tx *domain.DB) error {
+    for chunk := range slices.Chunk(rows, 1000) {
+        if _, err := tx.Prices.InsertMany(ctx, chunk,
+            orm.OnConflict(Prices.SKU).DoUpdate(Prices.Amount),
+        ); err != nil {
+            return err
+        }
+    }
+    return nil
+})
+```
+
+## Reading the plan before trusting any of it
+
+```go
+plan, err := q.Explain(ctx)              // EXPLAIN, never runs the statement
+plan, err := q.ExplainAnalyze(ctx)       // runs it, and the name says so
+report, err := q.PerformanceReport(ctx)  // plan, shape and fingerprint
+```
+
+The two names differ because the behaviours differ dangerously. Nothing here recommends anything: PostgreSQL plans, and what to change needs a whole workload rather than one statement.
+
+
+---
+
+# Project architectures
+
+> Four layouts that work, and what each one is actually for.
+
+https://ormgo.vercel.app/en/docs/cookbook/architecture/
+
+The repository ships all four as compiling, tested modules. What follows is the shape and the reasoning; the code is under `examples/`.
+
+## 1. Flat — a small service
+
+```text
+cmd/api/main.go
+internal/domain/entities.go     ← you write this
+internal/domain/orm_*.gen.go    ← generated beside it
+internal/http/handlers.go
+orm.yaml
+migrations/
+```
+
+Handlers take `*domain.DB` directly. There is no repository layer, because at this size a repository interface with one implementation is a file you maintain for nothing.
+
+Reach for something else when handlers start containing business rules, or when you want to test them without a database.
+
+## 2. Hexagonal — ports and adapters
+
+```text
+internal/core/            ← entities, services, port interfaces. No SQL, no HTTP.
+internal/adapters/postgres/
+internal/adapters/http/
+cmd/api/
+```
+
+The core defines what it needs:
+
+```go
+package core
+
+type UserStore interface {
+    ByID(ctx context.Context, id int64) (User, error)
+    Save(ctx context.Context, u User) error
+}
+```
+
+The adapter implements it with the ORM. The core imports neither `orm` nor `net/http`, so its tests need neither.
+
+**The rule that makes it work:** interfaces are defined where they are *used*, not where they are implemented. A `UserStore` in the adapter package is a `UserStore` the core cannot depend on without depending on the adapter.
+
+Reach for it when the domain has real rules, or when you have more than one transport.
+
+## 3. Modular monolith — bounded contexts
+
+```text
+internal/billing/     domain/ · store/ · service.go · port.go
+internal/catalog/     domain/ · store/ · service.go · port.go
+internal/identity/    domain/ · store/ · service.go · port.go
+cmd/api/main.go       ← wires them together
+```
+
+Each context owns its own schema — its own entities, its own `orm.yaml` package entry, sometimes its own PostgreSQL schema. Contexts talk through `port.go` and never import each other's `store/`.
+
+```yaml
+packages:
+  - path: ./internal/billing/domain
+    output: same
+  - path: ./internal/catalog/domain
+    output: same
+```
+
+Two contexts owning tables with the same name is fine, and the cross-schema tests exist to prove it: `billing.users` and `identity.users` produce separate descriptors, separate migration state and separate results.
+
+This is the layout that survives being split into services later, because the seams are already there.
+
+## 4. Production — the full stack
+
+The `examples/production` module is the reference for everything an actual deployment needs:
+
+- **Four HTTP transports** — net/http, chi, gin and fiber — over one service layer, to prove the service layer does not know about any of them.
+- **Observability** wired once at startup: `orm.Traced(pool, tracer)` and nothing below it mentions telemetry.
+- **Health checks** through `ormhealth`, including whether migrations are actually applied.
+- **Graceful shutdown**, in the order that matters: stop accepting, drain, then close the pool.
+
+```go
+func main() {
+    pool, err := pgxpool.NewWithConfig(ctx, cfg)
+    // ...
+    db := domain.New(orm.Traced(pool, observability.New(log, obsCfg)))
+    svc := service.New(db)
+    srv := server.New(httpapi.Routes(svc))
+    // ...
+}
+```
+
+One call, at startup, on the executor. A transaction started from it inherits the tracing.
+
+## Choosing
+
+| | Flat | Hexagonal | Modular monolith | Production |
+| --- | --- | --- | --- | --- |
+| Domain rules | few | many | many | many |
+| Transports | one | one or more | one or more | several |
+| Team size | 1–3 | 2–6 | 5+ | any |
+| Splitting later | painful | possible | designed for | designed for |
+
+## Rules that hold in all four
+
+**Generated code lives beside its entities.** `output: same` puts descriptors in the same package as the structs they describe, so an import cycle is impossible.
+
+**One executor, passed down.** No global DB, no `init()` connection, no ambient transaction. What a function can reach is what it was given.
+
+**Migrations are code review.** They are committed artifacts, planned by a command and read by a person before they run.
+
+**The two CI commands are not optional:**
+
+```bash
+orm makemigrations --check
+orm check --generated
+```
+
+The first fails when a struct changed and nobody planned it. The second fails when somebody planned and forgot to regenerate. Between them, the three representations cannot drift.
+
+
+---
+
+# Tracing and health
+
+> One tracer, attached once, and a health check that knows about migrations.
+
+https://ormgo.vercel.app/en/docs/observability/
+
+## The contract
+
+The ORM defines an interface and two event types, and imports no telemetry library. An ORM that imported one would make every project using it depend on that library's version, its transitive tree and its opinions.
+
+```go
+type Tracer interface {
+    Start(ctx context.Context, e observe.StartEvent) context.Context
+    End(ctx context.Context, e observe.EndEvent)
+}
+```
+
+## The rule worth stating first
+
+**A start event never carries bound argument values.** Not by convention, not behind an option somebody can turn off — the field does not exist.
+
+An ORM's tracing sees every query a program runs. A tracer that received the values would put every password, token and address the program handles into whatever the tracer writes to. The SQL is there with its placeholders, because `WHERE email = $1` is useful and says nothing about who.
+
+The exception is SQL you wrote yourself: this package cannot redact a literal out of a raw statement without parsing SQL, and building a SQL parser would be building the thing the ORM exists not to have. `StartEvent.Raw` says which statements those are.
+
+## Attaching
+
+```go
+db := domain.New(orm.Traced(pool, tracer))
+```
+
+One call, at startup, on the executor. Nothing below it — not the service, not the store, not the generated code — mentions telemetry, and a transaction started from this executor inherits it.
+
+## Two destinations
+
+An executor carries **one** tracer. Wrapping twice produces an executor whose tracer is the outer one and whose inner is never called — silently, with no error:
+
+```go
+ex := orm.Traced(orm.Traced(pool, logging), tracing) // WRONG
+```
+
+The way to reach two destinations is one tracer that forwards to both:
+
+```go
+type Multi []observe.Tracer
+
+func (m Multi) Start(ctx context.Context, e observe.StartEvent) context.Context {
+    for _, t := range m {
+        if t != nil {
+            ctx = t.Start(ctx, e) // threaded, so tracer two sees tracer one's context
+        }
+    }
+    return ctx
+}
+
+func (m Multi) End(ctx context.Context, e observe.EndEvent) {
+    for i := len(m) - 1; i >= 0; i-- { // reversed: nesting means closing inside-out
+        if m[i] != nil {
+            m[i].End(ctx, e)
+        }
+    }
+}
+```
+
+## slog
+
+```go
+import "github.com/AlexAli29/orm/ormslog"
+
+tracer := ormslog.New(log,
+    ormslog.WithSQL(true),
+    ormslog.WithSlowThreshold(200*time.Millisecond),
+    ormslog.WithRawSQL(false), // the switch that would let literals reach the log
+)
+```
+
+## OpenTelemetry
+
+A module of its own, so a project that does not use it never compiles it:
+
+```go
+import "github.com/AlexAli29/orm/ormotel"
+
+tracer := ormotel.New(otelTracer,
+    ormotel.WithSQL(true),
+    ormotel.WithRawSQL(false),
+    ormotel.WithErrorMessages(false),
+)
+```
+
+`WithErrorMessages(false)` is the default and worth keeping: PostgreSQL's message can quote a value from the row that broke a constraint, and a span goes somewhere with a different audience from the application log.
+
+## Health
+
+```go
+import "github.com/AlexAli29/orm/ormhealth"
+
+// A cheap liveness answer: can the pool reach PostgreSQL.
+report := ormhealth.Quick(ctx, pool)
+
+// The readiness one, which also asks whether the schema is the one the
+// declarations describe and whether every migration is applied.
+report := ormhealth.Deep(ctx, pool,
+    ormhealth.WithMigrationState(migrationsDir),
+    ormhealth.WithSchemaCheck("orm.yaml"),
+)
+```
+
+`WithMigrationState` is the one that catches the deploy that half-happened: the pool is up, the queries work, and the schema is a version behind. Liveness says fine; this says otherwise.
+
+## Worked examples
+
+### Wiring it once, at startup
+
+```go
+func main() {
+    pool, err := pgxpool.NewWithConfig(ctx, cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer pool.Close()
+
+    tracer := ormslog.New(logger,
+        ormslog.WithSQL(true),
+        ormslog.WithSlowThreshold(200*time.Millisecond),
+        ormslog.WithRawSQL(false))
+
+    db := domain.New(orm.Traced(pool, tracer))
+    // nothing below this line mentions telemetry
+}
+```
+
+### A readiness endpoint that knows about migrations
+
+```go
+http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+    report := ormhealth.Deep(r.Context(), pool,
+        ormhealth.WithMigrationState("migrations"),
+        ormhealth.WithSchemaCheck("orm.yaml"))
+    if report.Status != ormhealth.StatusUp {
+        w.WriteHeader(http.StatusServiceUnavailable)
+    }
+    writeJSON(w, report)
+})
+
+http.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+    if ormhealth.Quick(r.Context(), pool).Status != ormhealth.StatusUp {
+        w.WriteHeader(http.StatusServiceUnavailable)
+    }
+})
+```
+
+Liveness asks whether the process should be restarted. Readiness asks whether it
+should receive traffic — and a pod whose schema is a version behind should not,
+which is the failure `WithMigrationState` exists to catch.
+
+### Both a log and a span
+
+```go
+type Multi []observe.Tracer
+
+func (m Multi) Start(ctx context.Context, e observe.StartEvent) context.Context {
+    for _, t := range m {
+        ctx = t.Start(ctx, e)
+    }
+    return ctx
+}
+
+func (m Multi) End(ctx context.Context, e observe.EndEvent) {
+    for i := len(m) - 1; i >= 0; i-- {
+        m[i].End(ctx, e)
+    }
+}
+
+db := domain.New(orm.Traced(pool, Multi{slogTracer, otelTracer}))
+```
+
+Wrapping `Traced` twice does not do this — the inner tracer is never called, and
+nothing reports the mistake.
+
+
+---
+
+# Performance
+
+> Reading plans, fingerprinting statements, and the work the ORM does not do.
+
+https://ormgo.vercel.app/en/docs/performance/
+
+## What this is not
+
+There is no index advisor and no tuning advice. PostgreSQL plans, and what to change about a schema or a server needs a whole workload rather than one statement. What is here reports; it never recommends.
+
+## Explain
+
+```go
+plan, err := q.Explain(ctx)        // EXPLAIN — does not run the statement
+plan, err := q.ExplainAnalyze(ctx) // EXPLAIN ANALYZE — runs it, to measure it
+```
+
+The names differ because the behaviours differ dangerously. `ExplainAnalyze` on a `DELETE` deletes.
+
+```go
+plan, _ := q.Explain(ctx)
+fmt.Println(plan.TotalCost, plan.PlanRows)
+for _, node := range plan.Walk() {
+    if node.Type == "Seq Scan" && node.PlanRows > 10000 {
+        // a big sequential scan, reported rather than diagnosed
+    }
+}
+```
+
+## Diagnostics without a database
+
+```go
+report, err := q.Diagnostics()
+```
+
+Structure only — how many joins, whether a `LIMIT` is present, whether the statement is correlated. It needs no connection, so it runs in a unit test.
+
+## Fingerprints
+
+A fingerprint identifies a statement's *shape*, independently of its values:
+
+```go
+fp, err := q.Fingerprint()
+// v1:9f2c... — the same for every set of arguments
+```
+
+Two statements differing only in bind values fingerprint the same; two differing in `LIMIT` do not, because a small limit is what makes the planner prefer an index it would otherwise ignore. Grouping by "is the same statement" is worth more than grouping by "looks similar".
+
+## The performance report
+
+```go
+report, err := q.PerformanceReport(ctx)
+```
+
+Plan, shape and fingerprint together, always with a plain `EXPLAIN` and never an `ANALYZE`.
+
+## Things that are fast because of how the API is shaped
+
+**Relations are batched.** The statement count follows the shape of the tree you asked for, never the number of rows. There is no N+1 to find because there is no lazy loading to cause one.
+
+**Scanning does no reflection.** A projection scans into N typed locals with one `Scan` and one call. Entities scan through generated metadata.
+
+**Descriptors are shared, not copied.** They are read-only, so every query over a table reuses one set.
+
+**`Count` and `Exists` select a constant.** A row per match and no values from it, because asking for the columns would make the server fetch and decode data nobody reads.
+
+**COPY exists for bulk.** `CopyFrom` and `CopyFromSeq` are an order of magnitude faster than `INSERT` for loading, and the streaming form never holds the whole batch.
+
+## Measuring
+
+The repository has benchmarks that are compiled and run in CI, so a regression in the work between the caller and pgx shows up as a build failure rather than as nothing:
+
+```bash
+go test -run '^$' -bench . -benchtime 10x ./...
+```
+
+## Worked examples
+
+### Reading a plan before trusting a query
+
+```go
+q := db.Orders.Query().
+    Where(Orders.CustomerID.Eq(id)).
+    OrderBy(Orders.PlacedAt.Desc()).
+    Limit(20)
+
+plan, err := q.Explain(ctx)
+fmt.Println(plan.TotalCost, plan.PlanRows)
+```
+
+`Explain` does not run the statement. `ExplainAnalyze` does, which is why they
+have different names — running one on a `DELETE` deletes.
+
+### Grouping slow queries by shape
+
+```go
+fp, err := q.Fingerprint()
+metrics.Observe(fp.String(), elapsed)
+```
+
+Two calls with different customer ids fingerprint the same; the same query with a
+different `LIMIT` does not, because a small limit is what makes the planner
+choose an index it would otherwise skip.
+
+### Checking a query's shape in a unit test
+
+```go
+report, err := q.Diagnostics()   // no database needed
+if report.Joins > 3 {
+    t.Errorf("this grew a join nobody meant to add")
+}
+```
+
+### Counting statements rather than guessing
+
+```go
+db := domain.New(orm.Traced(pool, counter))
+
+_, _ = db.Customers.Query().With(Customers.Orders).All(ctx)
+// counter saw 2 statements, whatever the row count
+```
+
+A tracer is the honest way to assert there is no N+1: the number is observed
+rather than reasoned about.
+
+
+---
+
+# Testing
+
+> Real PostgreSQL, disposable databases, and no mocking of SQL.
+
+https://ormgo.vercel.app/en/docs/testing/
+
+## The position
+
+Do not mock the database. A mock of a SQL driver tests that you can write a mock; the behaviours that break in production — constraints, types, NULL semantics, transaction isolation — are exactly the ones a mock has no opinion about.
+
+Everything here is built to run against a real PostgreSQL and to make that cheap.
+
+## A database per test binary
+
+`ormtest` does not create databases. It gives you the pieces that make a real
+one usable: applying migrations, checking the schema is the one your config
+describes, and running a test inside a transaction that is always rolled back.
+
+```go
+import "github.com/AlexAli29/orm/ormtest"
+
+func TestMain(m *testing.M) {
+    conn, _ := pgx.Connect(ctx, os.Getenv("TEST_DSN"))
+    ormtest.Migrate(t, conn, "migrations")   // apply the committed artifacts
+    os.Exit(m.Run())
+}
+```
+
+`ormtest.CheckSchema(ctx, "orm.yaml")` is the assertion worth putting in CI: it
+fails when the database is not the schema the declarations describe, which is the
+failure that otherwise shows up as an unrelated test breaking oddly.
+
+`RequireSchemaClean` is the same check as a hard requirement.
+
+## Containers
+
+```go
+import ormpg "github.com/AlexAli29/orm/ormtest/postgres"
+
+func TestMain(m *testing.M) {
+    ormpg.Run(m, ormpg.WithImage("postgres:17"))
+}
+```
+
+A module of its own, because Testcontainers is a heavy dependency and a project that has a PostgreSQL already should not pay for it.
+
+## Emptying tables between tests
+
+`Truncate` lives in `ormtest` rather than in the query API, because emptying a
+table is a fixture operation rather than something an application does:
+
+```go
+import "github.com/AlexAli29/orm/ormtest"
+
+ormtest.MustTruncate(t, pool, domain.Users, domain.Orders)
+
+err := ormtest.TruncateWith(ctx, pool,
+    []ormtest.TruncateOption{ormtest.RestartIdentity(), ormtest.Cascade()},
+    domain.Users,
+)
+```
+
+It takes the generated table handles directly. `RestartIdentity` resets the
+identity sequences, which is usually what a fixture wants; `Cascade` follows
+foreign keys and will empty tables you did not name, so it is opt-in.
+
+Truncating several tables in one call is not a convenience — it is the only way
+to empty tables that reference each other without `Cascade`.
+
+## Transaction-per-test
+
+Fast, and isolated without dropping anything:
+
+```go
+func TestSomething(t *testing.T) {
+    ormtest.TxFunc(t, pool, func(ex orm.Executor) {
+        db := domain.New(ex)
+        // ... test ... the transaction is rolled back when it returns
+    })
+}
+```
+
+## Asserting on SQL without a database
+
+```go
+sql, args, err := q.SQL()
+if !strings.Contains(sql, "LEFT JOIN") { /* ... */ }
+```
+
+Useful for the shape of a query. Not a substitute for running it: SQL that looks right and returns the wrong rows is the failure mode this whole project is arranged against.
+
+## What CI should run
+
+```bash
+orm makemigrations --check   # a declaration with no migration
+orm check --generated        # generated code that drifted
+go test -race ./...
+```
+
+## Testing against every major
+
+The project's own compatibility suite refuses to run against fewer than all five supported majors, and it is worth stealing the idea: a matrix that silently runs on whichever server happened to be up proves less than it claims.
+
+```yaml
+strategy:
+  matrix:
+    postgres: ['14', '15', '16', '17', '18']
+```
+
+## Worked examples
+
+### A test that leaves nothing behind
+
+```go
+func TestPlaceOrder(t *testing.T) {
+    ormtest.TxFunc(t, pool, func(ex orm.Executor) {
+        db := domain.New(ex)
+
+        customer, err := db.Customers.Insert(t.Context(), Customer{Email: "a@example.com"})
+        if err != nil {
+            t.Fatal(err)
+        }
+        order, err := db.Orders.Insert(t.Context(), Order{CustomerID: customer.ID})
+        if err != nil {
+            t.Fatal(err)
+        }
+        if order.ID == 0 {
+            t.Error("the insert returned no key")
+        }
+    })
+}
+```
+
+Everything is rolled back when the callback returns, so tests can run in any
+order and none of them sees another's rows.
+
+### A fixture reset between suites
+
+```go
+func resetFixtures(t *testing.T, pool *pgxpool.Pool) {
+    ormtest.MustTruncate(t, pool, domain.OrderLines, domain.Orders, domain.Customers)
+}
+```
+
+Naming the tables in one call is what lets them reference each other without
+`Cascade`.
+
+### Asserting the schema is the one you declared
+
+```go
+func TestMain(m *testing.M) {
+    if err := ormtest.CheckSchema(context.Background(), "orm.yaml"); err != nil {
+        log.Fatalf("the test database is not the declared schema: %v", err)
+    }
+    os.Exit(m.Run())
+}
+```
+
+This turns "a test failed oddly" into "the database is a migration behind",
+which is a much shorter debugging session.
+
+### Testing a query without a database
+
+```go
+sql, args, err := db.Orders.Query().
+    Where(Orders.CustomerID.Eq(7)).
+    OrderBy(Orders.PlacedAt.Desc()).
+    SQL()
+
+if !strings.Contains(sql, "ORDER BY") {
+    t.Error("the ordering was dropped")
+}
+if len(args) != 1 {
+    t.Errorf("args = %d, want the customer id as a parameter", len(args))
+}
+```
+
+Useful for shape. Not a substitute for running it — SQL that looks right and
+returns the wrong rows is the failure this project is arranged against.
+
+
+---
+
+# Compatibility
+
+> Which PostgreSQL versions, which Go versions, and what stability means here.
+
+https://ormgo.vercel.app/en/docs/compatibility/
+
+## PostgreSQL
+
+**14, 15, 16, 17 and 18.**
+
+Not "should work on". The compatibility suite refuses to run unless all five are reachable at once:
+
+```text
+the compatibility matrix requires every supported major and
+[ORM_TEST_DSN_PG14 ... PG18] are unset. Skipping here would report a five-major
+claim proven by however many servers happened to be running
+```
+
+A version listed as supported and never run against is a claim nobody should believe.
+
+14 leaves the list when upstream ends its support on 12 November 2026.
+
+## What is proved across all five
+
+- The whole user workflow: migrate, generate, check, write, read, join, refresh.
+- **Byte-identical artifacts.** Generated Go, `orm.lock` and migration artifacts are the same on 14 and on 18. A mixed-server team gets no diff on checkout.
+- No server-local content in any artifact: no OIDs, no database name, no server version, no deparsed definition, no absolute paths.
+
+## Go
+
+The floor is the version in `go.mod`, currently **1.24**, and raising it is a decision rather than a side effect of a newer toolchain being available. A dedicated CI job pins `GOTOOLCHAIN=local` and builds only the modules that are on the floor, so the claim is proved rather than assumed.
+
+Some peripheral modules declare a higher version because their own dependencies do — the Testcontainers helper and some examples need 1.25. That does not move the library's floor, and the jobs are separated so it cannot.
+
+## PostGIS
+
+Proved on the combinations the project actually claims: PostgreSQL 17 with PostGIS 3.5, 16 with 3.4, and 14 with 3.4. The spatial suite skips when the extension is unavailable — right on a developer's machine, wrong in CI — so CI sets `ORM_REQUIRE_POSTGIS=1`, which turns the skip into a failure.
+
+## Stability
+
+The public API is frozen at v1 and tracked by a generated manifest. A removed symbol, a changed signature, a tightened constraint or a method added to an interface consumers implement all fail the build. The manifest tool is itself tested for noticing each of those.
+
+## Extensions
+
+`citext`, `hstore`, `pg_trgm`, `uuid-ossp` and PostGIS are recognised when present. None is required, and the ORM never creates an extension — that is a privileged operation belonging to whoever owns the database.
+
+## Worked examples
+
+### A CI matrix that cannot quietly shrink
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    postgres: ['14', '15', '16', '17', '18']
+```
+
+And the test that refuses to run on fewer, rather than reporting a five-version
+claim proven by however many servers happened to be up:
+
+```go
+func requireEveryMajor(t *testing.T) map[string]string {
+    var missing []string
+    for _, v := range []string{"14", "15", "16", "17", "18"} {
+        if os.Getenv("PG_DSN_"+v) == "" {
+            missing = append(missing, v)
+        }
+    }
+    if len(missing) > 0 {
+        t.Fatalf("missing servers for %v; skipping here would report a claim "+
+            "nobody proved", missing)
+    }
+    return nil
+}
+```
+
+### Pinning the Go floor and proving it
+
+```yaml
+- name: the library builds on its declared floor
+  env:
+    GOTOOLCHAIN: local     # do not silently fetch a newer Go
+  run: go build ./...
+```
+
+Without `GOTOOLCHAIN=local`, a newer toolchain is fetched on demand and the floor
+is never tested.
+
+### Making an optional extension mandatory in CI
+
+```yaml
+- env:
+    ORM_REQUIRE_POSTGIS: '1'
+  run: go test ./postgis/...
+```
+
+The spatial suite skips when PostGIS is absent, which is right on a laptop and
+wrong in CI. The variable turns the skip into a failure.

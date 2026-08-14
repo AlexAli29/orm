@@ -1,0 +1,58 @@
+# ORM
+
+> PostgreSQL-нативная ORM для Go. Структуры ваши, схема — PostgreSQL, а генератор доказывает, что они согласованы.
+
+Перед тем как писать код, прочитайте /api/orm.txt. Он порождён из самих пакетов и перечисляет каждый экспортированный символ. Если имени там нет — его не существует, каким бы правдоподобным оно ни выглядело.
+
+Вся документация одним файлом: https://ormgo.vercel.app/llms-full.ru.txt
+
+## Начало работы
+
+- [Введение](https://ormgo.vercel.app/ru/docs/introduction.md): Что делает эта библиотека, чего она принципиально не делает и почему разница важна.
+- [Установка](https://ormgo.vercel.app/ru/docs/installation.md): Модуль, CLI и файл конфигурации.
+- [Быстрый старт](https://ormgo.vercel.app/ru/docs/quickstart.md): От пустого каталога до типизированного запроса.
+- [Ключевые идеи](https://ormgo.vercel.app/ru/docs/concepts.md): Словарь, которым пользуется остальная документация.
+
+## Схема
+
+- [Сущности и теги](https://ormgo.vercel.app/ru/docs/entities.md): Директивы и теги структур, которые читает генератор.
+- [Отображение типов](https://ormgo.vercel.app/ru/docs/types.md): Как тип PostgreSQL становится типом Go и что происходит, когда эквивалента нет.
+- [Диапазоны](https://ormgo.vercel.app/ru/docs/ranges.md): Промежуток значений вместе с границами, а не две колонки, притворяющиеся одной.
+- [JSON и JSONB](https://ormgo.vercel.app/ru/docs/json.md): Чтение внутрь документа и почему любое чтение возвращает nullable.
+- [Даты и интервалы](https://ormgo.vercel.app/ru/docs/datetime.md): Усечение, извлечение и тип интервала, который отказывается врать про месяцы.
+- [Полнотекстовый поиск](https://ormgo.vercel.app/ru/docs/fulltext.md): tsvector, tsquery и ранжирование — части, которые есть в PostgreSQL, оставленные порознь.
+- [PostGIS](https://ormgo.vercel.app/ru/docs/postgis.md): Пространственные типы, которые остаются пространственными: geometry и geography порознь.
+- [Миграции](https://ormgo.vercel.app/ru/docs/migrations.md): Планирование, применение и доказательство изменений схемы.
+- [Представления](https://ormgo.vercel.app/ru/docs/views.md): Источники чтения первого класса и жизненный цикл обновления.
+
+## Запросы
+
+- [Запросы](https://ormgo.vercel.app/ru/docs/queries.md): Чтение сущностей — фильтры, сортировка, страницы и терминальные операции.
+- [Предикаты](https://ormgo.vercel.app/ru/docs/predicates.md): Какие сравнения даёт каждый тип колонки и почему наборы различаются.
+- [Связи](https://ormgo.vercel.app/ru/docs/relations.md): Загружается то, что попросили, за предсказуемое число запросов.
+- [Проекции](https://ormgo.vercel.app/ru/docs/projections.md): Выбор нужных колонок в тип, который выбрали вы.
+- [Выражения](https://ormgo.vercel.app/ru/docs/expressions.md): Условия, coalesce, приведения, строковые функции и аварийный выход для всего остального.
+- [Оконные функции](https://ormgo.vercel.app/ru/docs/windows.md): Ранжирование, соседние строки и накопительные итоги — по строке, не схлопывая их.
+- [Композиция](https://ormgo.vercel.app/ru/docs/composition.md): Джойны, CTE, производные таблицы и подзапросы — один компилятор, один запрос.
+- [UNION ALL](https://ormgo.vercel.app/ru/docs/union-all.md): Композиция двух типизированных SELECT в один, с сохранением дубликатов.
+- [Запись данных](https://ormgo.vercel.app/ru/docs/writing.md): Insert, update, delete и COPY — всё явно.
+- [Транзакции](https://ormgo.vercel.app/ru/docs/transactions.md): Один колбэк, одна транзакция, никакого скрытого состояния.
+
+## Рецепты
+
+- [Рецепты запросов](https://ormgo.vercel.app/ru/docs/cookbook/queries.md): Повседневные формы — фильтрация, страницы, агрегация, upsert, поиск.
+- [Сложные запросы](https://ormgo.vercel.app/ru/docs/cookbook/insane.md): Те, ради которых обычно берутся за сырой SQL, — составленные, типизированные и всё ещё одним запросом.
+- [Архитектуры проектов](https://ormgo.vercel.app/ru/docs/cookbook/architecture.md): Четыре рабочие компоновки и для чего на самом деле нужна каждая.
+
+## Эксплуатация
+
+- [Трейсинг и здоровье](https://ormgo.vercel.app/ru/docs/observability.md): Один трейсер, подключённый один раз, и health-проверка, знающая про миграции.
+- [Производительность](https://ormgo.vercel.app/ru/docs/performance.md): Чтение планов, отпечатки запросов и работа, которую библиотека не делает.
+- [Тестирование](https://ormgo.vercel.app/ru/docs/testing.md): Настоящий PostgreSQL, одноразовые базы и никакого мокинга SQL.
+- [Совместимость](https://ormgo.vercel.app/ru/docs/compatibility.md): Какие версии PostgreSQL и Go и что здесь означает стабильность.
+
+## Порождённые манифесты API
+
+- [orm.txt](https://ormgo.vercel.app/api/orm.txt): The ORM itself. Every exported symbol in github.com/AlexAli29/orm.
+- [ormtest-postgres.txt](https://ormgo.vercel.app/api/ormtest-postgres.txt): The test helpers, github.com/AlexAli29/orm/ormtest/postgres.
+- [ormotel.txt](https://ormgo.vercel.app/api/ormotel.txt): The OpenTelemetry integration, github.com/AlexAli29/orm/ormotel.

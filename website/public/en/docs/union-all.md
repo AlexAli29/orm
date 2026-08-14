@@ -1,0 +1,200 @@
+# UNION ALL
+
+> Composing two typed SELECTs into one, with duplicates kept.
+
+Source: https://ormgo.vercel.app/en/docs/union-all/
+Symbols: https://ormgo.vercel.app/api/orm.txt — the generated list of every exported name.
+
+---
+## Scope
+
+v1 composes `UNION ALL` and nothing else. `UNION`, `INTERSECT` and `EXCEPT` are not part of it, and the compiler refuses any other set operation rather than leaving a gap somebody discovers at run time.
+
+`UNION ALL` keeps duplicate rows. That is the operation: if you wanted them removed you wanted a different one.
+
+## Writing one
+
+A branch is any typed query: an entity `Query`, a `SelectQuery`, a
+`ComposedQuery`, or another `UnionQuery`. Every branch produces the same Go
+result type, and the type argument is written out because Go cannot infer it
+from an interface a branch happens to satisfy.
+
+```go
+type Row struct {
+    ID    int64
+    Label string
+}
+
+// One shape, used by both branches. The names matter: a compound is ordered by
+// output name, so declare them with As.
+shape := orm.Project2(
+    orm.Of(Users.ID).As("thing_id"),
+    orm.Of(Users.Email).As("label"),
+    func(id int64, label string) Row { return Row{ID: id, Label: label} },
+)
+
+fromUsers := orm.Compose(pool, shape).From(Users.Source())
+fromPosts := orm.Compose(pool, shape).From(Posts.Source())
+
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).All(ctx)
+```
+
+```sql
+SELECT "users"."id" AS "thing_id", "users"."email" AS "label" FROM "public"."users"
+UNION ALL
+SELECT "posts"."id" AS "thing_id", "posts"."title" AS "label" FROM "public"."posts"
+```
+
+`All`, `One`, `Rows` and `SQL` work as they do on any other query. When the
+branches were built without an executor, give the compound one with `Using`:
+
+```go
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).Using(pool).All(ctx)
+```
+
+## Ordering the result
+
+`OrderBy` on a compound takes an **output declaration**, not a column — because a
+compound's `ORDER BY` may name a column of the result and nothing else:
+
+```go
+label := orm.Named("label", orm.Of(Users.Email))
+
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).
+    OrderBy(label.Asc()).
+    Limit(20).
+    All(ctx)
+```
+
+Passing a column ordering instead does not compile:
+
+```go
+.OrderBy(Users.ID.Asc())          // does not compile
+.OrderBy(orm.Of(Users.ID).Asc())  // does not compile either
+```
+
+That is deliberate. Both would render a term PostgreSQL refuses outright, and
+`OutputOrder` exists to make them unwritable rather than to catch them later.
+
+## The rules
+
+Branches must have **exactly** compatible output shapes — same column count, same order, same Go result types, same nullability. The v1 contract is deliberately stricter than PostgreSQL's implicit coercion:
+
+- `int32` and `int64` are not merged.
+- `uuid.UUID` and `string` are not merged.
+- A non-nullable and a nullable column are not merged.
+
+PostgreSQL could find a common type for some of those. Letting it would make the Go result type depend on a coercion rule nobody reads, so the answer is a refusal with the mismatch named.
+
+## Branch-local clauses
+
+A branch may carry its own `ORDER BY`, `LIMIT` and `OFFSET`, and it means what it says:
+
+```sql
+(SELECT ... ORDER BY placed DESC LIMIT 2)
+UNION ALL
+(SELECT ... ORDER BY placed DESC LIMIT 2)
+LIMIT 3
+```
+
+The parentheses are the grammar, not a style. Written bare, PostgreSQL attaches those clauses to the whole compound — so a branch that looks limited is not, and the rows you get are not the rows you asked for. The compiler parenthesises a branch exactly when it carries one of them.
+
+## Compound clauses
+
+`ORDER BY`, `LIMIT` and `OFFSET` on the compound apply to the complete result, after both branches:
+
+```sql
+SELECT ... UNION ALL SELECT ... ORDER BY "email" ASC LIMIT 10
+```
+
+A compound's `ORDER BY` may name an **output column** and nothing else. That is PostgreSQL's rule: a qualified reference gets `missing FROM-clause entry`, and an expression gets `invalid UNION/INTERSECT/EXCEPT ORDER BY clause`. Without an outer `ORDER BY`, nothing about the order of the result is promised.
+
+## Placeholders are global
+
+The branches share one parameter list:
+
+```sql
+SELECT ... WHERE email = $1
+UNION ALL
+SELECT ... WHERE label = $2
+```
+
+Restarting numbering in the second branch would produce SQL PostgreSQL accepts and binds the wrong values into — which is why this is the property the implementation leads with.
+
+## Scope is per branch
+
+A branch sees the compound's `WITH` items and its own sources. It does not see the other branch's:
+
+A branch is not a scope-sharing mechanism, and that is structural — each branch pushes its own scope frame.
+
+## Nesting
+
+`A UNION ALL B UNION ALL C` is one operation over three inputs, so it renders flat. Building it as `A UNION ALL (B UNION ALL C)` parenthesises the inner one, because at that point you asked for it — and because the inner compound's own `ORDER BY` and `LIMIT` would otherwise bind to the outer.
+
+## One statement
+
+A compound is one SQL statement. It is never two queries whose rows are appended in Go — that would lose the compound `ORDER BY`, lose `LIMIT`, and turn one round trip into two.
+
+## Worked examples
+
+### One activity feed from three tables
+
+Comments, likes and follows, interleaved by time. The projection is what makes
+them the same shape:
+
+```go
+type Item struct {
+    At   time.Time
+    Kind string
+    Text string
+}
+
+feed := func(at orm.Expression[time.Time, *time.Time], kind string,
+    text orm.Expression[string, *string]) orm.Projection[orm.Composed, Item] {
+    return orm.Project3(at, orm.Val(kind), text,
+        func(a time.Time, k, t string) Item { return Item{a, k, t} })
+}
+
+when := orm.Named("at", orm.Of(Comments.PostedAt))
+
+rows, err := orm.UnionAll[Item](
+    orm.Compose(pool, feed(orm.Of(Comments.PostedAt), "comment", orm.Of(Comments.Body))).
+        From(Comments.Source()),
+    orm.Compose(pool, feed(orm.Of(Likes.LikedAt), "like", orm.Of(Likes.Target))).
+        From(Likes.Source()),
+    orm.Compose(pool, feed(orm.Of(Follows.At), "follow", orm.Of(Follows.Handle))).
+        From(Follows.Source()),
+).OrderBy(when.Desc()).Limit(50).All(ctx)
+```
+
+Three tables, one statement, one `ORDER BY` over the whole result. Fetching each
+separately and merging in Go would need all three complete before it could take
+the newest fifty.
+
+### Live rows and archived rows
+
+The same shape from two tables that are the same table split by age:
+
+```go
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Orders.Source()).
+        Where(orm.Cond(Orders.PlacedAt.Gte(cutoff))),
+    orm.Compose(pool, shape).From(ArchivedOrders.Source()).
+        Where(orm.Cond(ArchivedOrders.PlacedAt.Lt(cutoff))),
+).All(ctx)
+```
+
+### Branch limits and a compound limit
+
+```go
+// The two newest of each, then the three newest overall.
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Inbox.Source()).
+        OrderBy(orm.Of(Inbox.At).Desc()).Limit(2),
+    orm.Compose(pool, shape).From(Archive.Source()).
+        OrderBy(orm.Of(Archive.At).Desc()).Limit(2),
+).OrderBy(when.Desc()).Limit(3).All(ctx)
+```
+
+Four rows are fetched and three are returned. The branch limits are parenthesised
+so they stay branch limits.

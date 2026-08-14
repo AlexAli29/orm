@@ -1,0 +1,58 @@
+# ORM
+
+> A PostgreSQL-native ORM for Go. You own your structs, PostgreSQL owns your schema, and the generator proves they agree.
+
+Before writing code against this library, read /api/orm.txt. It is generated from the packages and lists every exported symbol. If a name is not in it, it does not exist — no matter how plausible it looks.
+
+The whole of these docs in one file: https://ormgo.vercel.app/llms-full.txt
+
+## Getting started
+
+- [Introduction](https://ormgo.vercel.app/en/docs/introduction.md): What this ORM is, what it refuses to do, and why the difference matters.
+- [Installation](https://ormgo.vercel.app/en/docs/installation.md): The module, the CLI and the configuration file.
+- [Quickstart](https://ormgo.vercel.app/en/docs/quickstart.md): From an empty directory to a typed query.
+- [Core concepts](https://ormgo.vercel.app/en/docs/concepts.md): The vocabulary the rest of the documentation uses.
+
+## Schema
+
+- [Entities and tags](https://ormgo.vercel.app/en/docs/entities.md): The directives and struct tags the generator reads.
+- [Type mapping](https://ormgo.vercel.app/en/docs/types.md): How a PostgreSQL type becomes a Go type, and what happens when Go has no equivalent.
+- [Ranges](https://ormgo.vercel.app/en/docs/ranges.md): A span of values, with its bounds kept — not two columns pretending to be one.
+- [JSON and JSONB](https://ormgo.vercel.app/en/docs/json.md): Reading into a document, and why every reader comes back nullable.
+- [Dates and intervals](https://ormgo.vercel.app/en/docs/datetime.md): Truncating, extracting, and an interval type that refuses to lie about months.
+- [Full-text search](https://ormgo.vercel.app/en/docs/fulltext.md): tsvector, tsquery and ranking — the pieces PostgreSQL has, kept apart.
+- [PostGIS](https://ormgo.vercel.app/en/docs/postgis.md): Spatial types that stay spatial — geometry and geography, kept apart.
+- [Migrations](https://ormgo.vercel.app/en/docs/migrations.md): Planning, applying and proving schema change.
+- [Views and materialized views](https://ormgo.vercel.app/en/docs/views.md): Read sources the ORM treats as first class, and the refresh lifecycle.
+
+## Querying
+
+- [Queries](https://ormgo.vercel.app/en/docs/queries.md): Reading entities: filters, ordering, paging and the terminal operations.
+- [Predicates](https://ormgo.vercel.app/en/docs/predicates.md): The comparisons each column type offers, and why the set differs.
+- [Relations](https://ormgo.vercel.app/en/docs/relations.md): Loading what you asked for, in a statement count you can predict.
+- [Projections](https://ormgo.vercel.app/en/docs/projections.md): Selecting the columns you want, into a type you chose.
+- [Expressions](https://ormgo.vercel.app/en/docs/expressions.md): Conditionals, coalescing, casts, string functions, and the escape hatch for the rest.
+- [Window functions](https://ormgo.vercel.app/en/docs/windows.md): Ranking, offsets and running totals — computed per row, without collapsing them.
+- [Composition](https://ormgo.vercel.app/en/docs/composition.md): Joins, CTEs, derived tables and subqueries — one compiler, one statement.
+- [UNION ALL](https://ormgo.vercel.app/en/docs/union-all.md): Composing two typed SELECTs into one, with duplicates kept.
+- [Writing data](https://ormgo.vercel.app/en/docs/writing.md): Insert, update, delete and COPY — all of it explicit.
+- [Transactions](https://ormgo.vercel.app/en/docs/transactions.md): One callback, one transaction, no hidden state.
+
+## Cookbook
+
+- [Query recipes](https://ormgo.vercel.app/en/docs/cookbook/queries.md): The everyday shapes, written out — filtering, paging, aggregation, upserts, search.
+- [Hard queries](https://ormgo.vercel.app/en/docs/cookbook/insane.md): The ones people reach for raw SQL to write — composed, typed, and still one statement.
+- [Project architectures](https://ormgo.vercel.app/en/docs/cookbook/architecture.md): Four layouts that work, and what each one is actually for.
+
+## Operations
+
+- [Tracing and health](https://ormgo.vercel.app/en/docs/observability.md): One tracer, attached once, and a health check that knows about migrations.
+- [Performance](https://ormgo.vercel.app/en/docs/performance.md): Reading plans, fingerprinting statements, and the work the ORM does not do.
+- [Testing](https://ormgo.vercel.app/en/docs/testing.md): Real PostgreSQL, disposable databases, and no mocking of SQL.
+- [Compatibility](https://ormgo.vercel.app/en/docs/compatibility.md): Which PostgreSQL versions, which Go versions, and what stability means here.
+
+## Generated API manifests
+
+- [orm.txt](https://ormgo.vercel.app/api/orm.txt): The ORM itself. Every exported symbol in github.com/AlexAli29/orm.
+- [ormtest-postgres.txt](https://ormgo.vercel.app/api/ormtest-postgres.txt): The test helpers, github.com/AlexAli29/orm/ormtest/postgres.
+- [ormotel.txt](https://ormgo.vercel.app/api/ormotel.txt): The OpenTelemetry integration, github.com/AlexAli29/orm/ormotel.

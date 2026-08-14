@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "prebuild": "node scripts/build-search.mjs",
-    "search": "node scripts/build-search.mjs"
+    "prebuild": "node scripts/build-search.mjs && node scripts/build-llms.mjs",
+    "search": "node scripts/build-search.mjs",
+    "llms": "node scripts/build-llms.mjs"
   },
   "dependencies": {
     "github-slugger": "^2.0.0",
