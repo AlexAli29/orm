@@ -11,3 +11,5 @@
 
 # The mutation harness is built on demand; a committed binary is not evidence.
 /mutate
+.vercel
+.env*
