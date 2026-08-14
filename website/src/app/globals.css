@@ -1,0 +1,490 @@
+@import "tailwindcss";
+
+/*
+  The palette is Go's own.
+
+  #00ADD8 is the Gopher blue from the Go brand; #5DC9E2 is the light tint used
+  for the mascot, #CE3262 the Go pink, #FDDD00 the yellow and #00758D the dark
+  teal. They are declared once here and everything else is derived, so a tint
+  that reads wrong is fixed in one place rather than in forty gradients.
+
+  Glass is a background, a blur and a hairline border. The hairline is what makes
+  it read as glass rather than as a translucent rectangle: a real edge catches
+  light, so the border is lighter than the fill on top and darker underneath.
+*/
+
+@theme {
+  --color-go-blue: #00add8;
+  --color-go-light: #5dc9e2;
+  --color-go-dark: #00758d;
+  --color-go-pink: #ce3262;
+  --color-go-yellow: #fddd00;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+:root {
+  color-scheme: light;
+
+  --bg: #f4fbfd;
+  --bg-deep: #e8f6fa;
+  --fg: #0b2027;
+  --fg-muted: #4a6673;
+  --fg-faint: #7a949f;
+
+  --glass: rgb(255 255 255 / 0.62);
+  --glass-strong: rgb(255 255 255 / 0.82);
+  --glass-border: rgb(255 255 255 / 0.75);
+  --glass-edge: rgb(0 117 141 / 0.12);
+  --glass-shadow: 0 8px 32px rgb(0 68 82 / 0.10), 0 1px 2px rgb(0 68 82 / 0.06);
+
+  --accent: #0090b4;
+  --accent-soft: rgb(0 173 216 / 0.12);
+  --rule: rgb(0 117 141 / 0.14);
+
+  --code-bg: rgb(255 255 255 / 0.72);
+  --code-border: rgb(0 117 141 / 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: #04141a;
+    --bg-deep: #020c10;
+    --fg: #e6f6fb;
+    --fg-muted: #9dbcc7;
+    --fg-faint: #6b8b96;
+
+    --glass: rgb(11 41 51 / 0.55);
+    --glass-strong: rgb(9 34 43 / 0.80);
+    --glass-border: rgb(93 201 226 / 0.16);
+    --glass-edge: rgb(0 0 0 / 0.35);
+    --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.45), 0 1px 2px rgb(0 0 0 / 0.30);
+
+    --accent: #5dc9e2;
+    --accent-soft: rgb(0 173 216 / 0.16);
+    --rule: rgb(93 201 226 / 0.16);
+
+    --code-bg: rgb(4 20 26 / 0.72);
+    --code-border: rgb(93 201 226 / 0.14);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #04141a;
+  --bg-deep: #020c10;
+  --fg: #e6f6fb;
+  --fg-muted: #9dbcc7;
+  --fg-faint: #6b8b96;
+
+  --glass: rgb(11 41 51 / 0.55);
+  --glass-strong: rgb(9 34 43 / 0.80);
+  --glass-border: rgb(93 201 226 / 0.16);
+  --glass-edge: rgb(0 0 0 / 0.35);
+  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.45), 0 1px 2px rgb(0 0 0 / 0.30);
+
+  --accent: #5dc9e2;
+  --accent-soft: rgb(0 173 216 / 0.16);
+  --rule: rgb(93 201 226 / 0.16);
+
+  --code-bg: rgb(4 20 26 / 0.72);
+  --code-border: rgb(93 201 226 / 0.14);
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 6rem;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/*
+  The aurora behind the glass.
+
+  Glass with nothing behind it is a grey box. These three blurred pools are what
+  the panels refract, and they are fixed rather than scrolled so the refraction
+  changes as content moves over them.
+*/
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+}
+.aurora::before,
+.aurora::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.55;
+}
+.aurora::before {
+  width: 46rem;
+  height: 46rem;
+  top: -14rem;
+  left: -10rem;
+  background: radial-gradient(circle, var(--color-go-blue) 0%, transparent 68%);
+}
+.aurora::after {
+  width: 38rem;
+  height: 38rem;
+  top: 28%;
+  right: -12rem;
+  background: radial-gradient(circle, var(--color-go-light) 0%, transparent 68%);
+}
+.aurora > span {
+  position: absolute;
+  width: 34rem;
+  height: 34rem;
+  bottom: -12rem;
+  left: 32%;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.28;
+  background: radial-gradient(circle, var(--color-go-pink) 0%, transparent 70%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .aurora::before {
+    animation: drift-a 26s ease-in-out infinite alternate;
+  }
+  .aurora::after {
+    animation: drift-b 32s ease-in-out infinite alternate;
+  }
+}
+@keyframes drift-a {
+  to {
+    transform: translate3d(4rem, 3rem, 0) scale(1.08);
+  }
+}
+@keyframes drift-b {
+  to {
+    transform: translate3d(-5rem, -2rem, 0) scale(1.06);
+  }
+}
+
+/* The glass primitive. */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 0 rgb(255 255 255 / 0.35);
+}
+.glass-strong {
+  background: var(--glass-strong);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 0 rgb(255 255 255 / 0.35);
+}
+
+/* Focus is visible everywhere, because a docs site is read with a keyboard. */
+:where(a, button, input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+
+/* Scrollbars, so the sidebar does not carry a chrome-grey slab. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--rule);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/*
+  Prose.
+
+  Written out rather than pulled from a plugin, because the code blocks are
+  Shiki's and have to sit inside glass without fighting it.
+*/
+.prose {
+  color: var(--fg);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+.prose > * + * {
+  margin-top: 1.15rem;
+}
+.prose h2 {
+  margin-top: 3rem;
+  font-size: 1.6rem;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  scroll-margin-top: 6rem;
+}
+.prose h3 {
+  margin-top: 2.25rem;
+  font-size: 1.22rem;
+  line-height: 1.35;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  scroll-margin-top: 6rem;
+}
+.prose h4 {
+  margin-top: 1.75rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  scroll-margin-top: 6rem;
+}
+.prose p {
+  color: var(--fg-muted);
+}
+.prose strong {
+  color: var(--fg);
+  font-weight: 640;
+}
+.prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.prose a:hover {
+  text-decoration-color: var(--accent);
+}
+.prose ul,
+.prose ol {
+  padding-left: 1.35rem;
+  color: var(--fg-muted);
+}
+.prose ul {
+  list-style: disc;
+}
+.prose ol {
+  list-style: decimal;
+}
+.prose li + li {
+  margin-top: 0.4rem;
+}
+.prose li::marker {
+  color: var(--fg-faint);
+}
+.prose blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 0.35rem 0 0.35rem 1rem;
+  color: var(--fg-muted);
+  font-style: italic;
+}
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2.5rem 0;
+}
+
+/* Inline code. */
+.prose :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  padding: 0.15em 0.4em;
+  border-radius: 0.375rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  white-space: nowrap;
+}
+
+/* Shiki blocks. */
+.prose pre {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  line-height: 1.7;
+  padding: 1.1rem 1.2rem;
+  border-radius: 0.9rem;
+  overflow-x: auto;
+  background: var(--code-bg) !important;
+  border: 1px solid var(--code-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--glass-shadow);
+}
+.prose pre code {
+  background: none;
+  padding: 0;
+  border: 0;
+  font-size: inherit;
+  white-space: pre;
+}
+/* Shiki emits both themes; the CSS variables pick one. */
+:root[data-theme="dark"] .shiki,
+:root[data-theme="dark"] .shiki span {
+  color: var(--shiki-dark) !important;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .shiki,
+  :root:not([data-theme="light"]) .shiki span {
+    color: var(--shiki-dark) !important;
+  }
+}
+
+/* Tables scroll on their own rather than pushing the page sideways. */
+.prose .table-wrap {
+  overflow-x: auto;
+  border-radius: 0.9rem;
+  border: 1px solid var(--rule);
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.prose th,
+.prose td {
+  padding: 0.7rem 0.95rem;
+  text-align: left;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.prose th {
+  font-weight: 640;
+  color: var(--fg);
+  background: var(--accent-soft);
+}
+.prose td {
+  color: var(--fg-muted);
+}
+.prose tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Anchor links appear on hover, and are always reachable by keyboard. */
+.heading-anchor {
+  opacity: 0;
+  margin-left: 0.45rem;
+  color: var(--fg-faint);
+  text-decoration: none !important;
+  font-weight: 400;
+}
+h2:hover .heading-anchor,
+h3:hover .heading-anchor,
+h4:hover .heading-anchor,
+.heading-anchor:focus-visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+  Code block chrome.
+
+  The language chip and the copy button are positioned over the block rather
+  than inside it, so neither becomes part of what the copy button copies.
+*/
+.code-block {
+  position: relative;
+}
+.code-lang {
+  position: absolute;
+  top: 0.6rem;
+  right: 3rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.code-copy {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.55rem;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--code-border);
+  background: var(--glass-strong);
+  color: var(--fg-muted);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  cursor: pointer;
+}
+.code-block:hover .code-copy,
+.code-block:hover .code-lang,
+.code-copy:focus-visible {
+  opacity: 1;
+}
+.code-copy:hover {
+  color: var(--accent);
+}
+.code-copy.copied {
+  color: var(--accent);
+  border-color: var(--accent);
+  opacity: 1;
+}
+/* The confirmation is a tooltip rather than a swapped icon, so the button does
+   not resize and the pointer does not lose it. */
+.code-copy.copied::after {
+  content: attr(data-label);
+  position: absolute;
+  right: calc(100% + 0.4rem);
+  white-space: nowrap;
+  font-size: 0.7rem;
+  font-family: var(--font-sans);
+  color: var(--accent);
+}
+
+/* On a touch screen there is no hover, so the affordances are always there. */
+@media (hover: none) {
+  .code-copy,
+  .code-lang {
+    opacity: 1;
+  }
+}
+
+/* Search result snippets clamp to two lines. */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
