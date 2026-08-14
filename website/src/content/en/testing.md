@@ -36,6 +36,29 @@ func TestMain(m *testing.M) {
 
 A module of its own, because Testcontainers is a heavy dependency and a project that has a PostgreSQL already should not pay for it.
 
+## Emptying tables between tests
+
+`Truncate` lives in `ormtest` rather than in the query API, because emptying a
+table is a fixture operation rather than something an application does:
+
+```go
+import "github.com/AlexAli29/orm/ormtest"
+
+ormtest.MustTruncate(t, pool, domain.Users, domain.Orders)
+
+err := ormtest.TruncateWith(ctx, pool,
+    []ormtest.TruncateOption{ormtest.RestartIdentity(), ormtest.Cascade()},
+    domain.Users,
+)
+```
+
+It takes the generated table handles directly. `RestartIdentity` resets the
+identity sequences, which is usually what a fixture wants; `Cascade` follows
+foreign keys and will empty tables you did not name, so it is opt-in.
+
+Truncating several tables in one call is not a convenience — it is the only way
+to empty tables that reference each other without `Cascade`.
+
 ## Transaction-per-test
 
 Fast, and isolated without dropping anything:

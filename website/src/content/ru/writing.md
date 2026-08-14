@@ -71,8 +71,8 @@ n, err := db.Users.Delete(ctx).Where(Users.ID.Eq(id)).Exec(ctx)
 
 ```go
 db.Users.Insert(ctx, user,
-    orm.OnConflict(Users.Email).DoUpdate(
-        orm.Assign(Users.Active, true),
+    orm.OnConflict(Users.Email).DoUpdateSet(
+        Users.Active.Set(true),
     ),
 )
 
@@ -80,6 +80,62 @@ db.Users.Insert(ctx, user, orm.OnConflict(Users.Email).DoNothing())
 ```
 
 Цель конфликта — список колонок, по которому PostgreSQL его определяет; `DO UPDATE` видит конфликтную строку и `EXCLUDED`.
+
+## Upsert подробно
+
+`OnConflict` называет колонки, по которым PostgreSQL определяет конфликт, —
+обычно это колонки уникального ограничения.
+
+```go
+// Ничего не делать, если запись уже есть.
+db.Users.Insert(ctx, user, orm.OnConflict(Users.Email).DoNothing())
+
+// Взять значения пришедшей строки для названных колонок.
+db.Users.Insert(ctx, user, orm.OnConflict(Users.Email).DoUpdate(Users.Name, Users.Seen))
+
+// Или задать их самому.
+db.Users.Insert(ctx, user, orm.OnConflict(Users.Email).DoUpdateSet(
+    Users.Seen.Set(time.Now()),
+    Users.Hits.SetExpr(Users.Hits.Add(1)),
+))
+```
+
+`DoUpdate` — частый случай, читается как «эти колонки берут новые значения».
+`DoUpdateSet` — когда новое значение вычисляется: инкремент счётчика, выбор
+большего из двух чисел, добавление в массив.
+
+Частичному индексу нужен тот же предикат в конструкции конфликта:
+
+```go
+orm.OnConflict(Users.Email).Where(Users.Active.Eq(true)).DoNothing()
+```
+
+## RETURNING в update и delete
+
+Вставка возвращает строки сама. Обновление и удаление — нет, поэтому просите:
+
+```go
+updated, err := orm.UpdateReturningEntity(
+    db.Users.Update(ctx).Set(Users.Active, false).Where(Users.ID.Eq(id)),
+).All(ctx)
+// []User — строки в том виде, в каком они после обновления
+
+deleted, err := orm.DeleteReturningEntity(
+    db.Users.Delete(ctx).Where(Users.ID.Eq(id)),
+).One(ctx)
+```
+
+Или вернуть проекцию вместо целой сущности:
+
+```go
+rows, err := orm.UpdateReturning(
+    db.Users.Update(ctx).Set(Users.Active, false).Where(cond),
+    Summaries,
+).All(ctx)
+```
+
+Так вы узнаёте, что на самом деле сделала условная запись: счётчик строк говорит
+сколько, а `RETURNING` — какие именно.
 
 ## COPY
 

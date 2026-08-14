@@ -40,6 +40,10 @@ export const nav: NavSection[] = [
     items: [
       { slug: "entities", title: { en: "Entities and tags", ru: "Сущности и теги" } },
       { slug: "types", title: { en: "Type mapping", ru: "Отображение типов" } },
+      { slug: "ranges", title: { en: "Ranges", ru: "Диапазоны" } },
+      { slug: "json", title: { en: "JSON and JSONB", ru: "JSON и JSONB" } },
+      { slug: "datetime", title: { en: "Dates and intervals", ru: "Даты и интервалы" } },
+      { slug: "fulltext", title: { en: "Full-text search", ru: "Полнотекстовый поиск" } },
       { slug: "postgis", title: { en: "PostGIS", ru: "PostGIS" } },
       { slug: "migrations", title: { en: "Migrations", ru: "Миграции" } },
       { slug: "views", title: { en: "Views and materialized views", ru: "Представления" } },

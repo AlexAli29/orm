@@ -57,20 +57,24 @@ Users.Bio.Eq("hello")   // тоже доступно: это bio = 'hello'
 
 ### Массивы
 
+Вхождение в массив — это свободные функции, а не методы, и они дают
+`Predicate[Composed]`. Не-nullable колонка поднимается через `orm.Opt`:
+
 ```go
-Users.Tags.Contains([]string{"go"})     // @>
-Users.Tags.ContainedBy(all)             // <@
-Users.Tags.Overlaps([]string{"a", "b"}) // &&
-Users.Tags.HasElement("go")             // = ANY
-Users.Tags.Len().Eq(3)
+orm.ArrayContains(orm.Opt(Users.Tags), orm.Val([]string{"go"}))     // @>
+orm.ArrayContainedBy(orm.Opt(Users.Tags), orm.Val(all))             // <@
+orm.ArrayOverlaps(orm.Opt(Users.Tags), orm.Val([]string{"a", "b"})) // &&
 ```
 
 ### JSONB
 
+Тоже свободные функции и по той же причине — с любой стороны может быть колонка
+или выражение. Весь набор — в разделе [JSON и JSONB](/ru/docs/json/):
+
 ```go
-Users.Meta.HasKey("plan")
-Users.Meta.Contains(orm.JSONB(`{"plan":"pro"}`))
-Users.Meta.Path("billing", "tier").AsText().Eq("gold")
+orm.JSONHasKey(orm.Opt(Users.Meta), "plan")
+orm.JSONPathExists(orm.Opt(Users.Meta), "$.billing.tier")
+orm.JSONPathText(orm.Opt(Users.Meta), "billing", "tier")
 ```
 
 ### Диапазоны

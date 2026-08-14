@@ -156,10 +156,8 @@ db.Users.Query().
 
 ```go
 db.Users.Insert(ctx, user,
-    orm.OnConflict(Users.Email).DoUpdate(
-        orm.Assign(Users.Name, user.Name),
-        orm.Assign(Users.UpdatedAt, time.Now()),
-    ),
+    // Take the new row's values for these columns.
+    orm.OnConflict(Users.Email).DoUpdate(Users.Name, Users.UpdatedAt),
 )
 ```
 
@@ -207,14 +205,28 @@ err := db.Tx(ctx, func(tx *domain.DB) error {
 
 ## JSON и массивы
 
-```go
-db.Users.Query().Where(Users.Meta.HasKey("plan"))
-db.Users.Query().Where(Users.Meta.Contains(orm.JSONB(`{"plan":"pro"}`)))
-db.Users.Query().Where(Users.Meta.Path("billing", "tier").AsText().Eq("gold"))
+Это свободные функции, дающие `Predicate[Composed]`, поэтому они идут в
+составной запрос. `orm.Opt` поднимает не-nullable колонку:
 
-db.Users.Query().Where(Users.Tags.Contains([]string{"go", "sql"}))
-db.Users.Query().Where(Users.Tags.Overlaps([]string{"go"}))
-db.Users.Query().Where(Users.Tags.Len().Gte(3))
+```go
+meta := orm.Opt(Users.Meta)
+tags := orm.Opt(Users.Tags)
+
+orm.Compose(pool, shape).From(Users.Source()).Where(
+    orm.JSONHasKey(meta, "plan"),
+)
+
+orm.Compose(pool, shape).From(Users.Source()).Where(
+    orm.JSONContains(meta, orm.Val(map[string]any{"plan": "pro"})),
+)
+
+// текст по пути, приведённый к сравнимому типу
+tier := orm.CastNull(orm.JSONPathText(meta, "billing", "tier"), orm.Text)
+
+orm.Compose(pool, shape).From(Users.Source()).Where(
+    orm.ArrayContains(tags, orm.Val([]string{"go", "sql"})),
+    orm.ArrayOverlaps(tags, orm.Val([]string{"go"})),
+)
 ```
 
 ## Полнотекстовый поиск

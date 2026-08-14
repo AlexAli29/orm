@@ -183,9 +183,7 @@ orm.Compose(pool, shape).
 err := db.Tx(ctx, func(tx *domain.DB) error {
     for chunk := range slices.Chunk(rows, 1000) {
         if _, err := tx.Prices.InsertMany(ctx, chunk,
-            orm.OnConflict(Prices.SKU).DoUpdate(
-                orm.Assign(Prices.Amount, orm.Excluded(Prices.Amount)),
-            ),
+            orm.OnConflict(Prices.SKU).DoUpdate(Prices.Amount),
         ); err != nil {
             return err
         }

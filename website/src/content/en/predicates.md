@@ -57,20 +57,24 @@ Users.Bio.Eq("hello")   // still available: it means bio = 'hello'
 
 ### Arrays
 
+Array containment is free functions rather than methods, and they produce a
+`Predicate[Composed]`. A non-nullable column is lifted with `orm.Opt`:
+
 ```go
-Users.Tags.Contains([]string{"go"})     // @>
-Users.Tags.ContainedBy(all)             // <@
-Users.Tags.Overlaps([]string{"a", "b"}) // &&
-Users.Tags.HasElement("go")             // = ANY
-Users.Tags.Len().Eq(3)
+orm.ArrayContains(orm.Opt(Users.Tags), orm.Val([]string{"go"}))     // @>
+orm.ArrayContainedBy(orm.Opt(Users.Tags), orm.Val(all))             // <@
+orm.ArrayOverlaps(orm.Opt(Users.Tags), orm.Val([]string{"a", "b"})) // &&
 ```
 
 ### JSONB
 
+Also free functions, for the same reason — either side can be a column or an
+expression. See [JSON and JSONB](/en/docs/json/) for the whole set:
+
 ```go
-Users.Meta.HasKey("plan")
-Users.Meta.Contains(orm.JSONB(`{"plan":"pro"}`))
-Users.Meta.Path("billing", "tier").AsText().Eq("gold")
+orm.JSONHasKey(orm.Opt(Users.Meta), "plan")
+orm.JSONPathExists(orm.Opt(Users.Meta), "$.billing.tier")
+orm.JSONPathText(orm.Opt(Users.Meta), "billing", "tier")
 ```
 
 ### Ranges
