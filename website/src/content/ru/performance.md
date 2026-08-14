@@ -72,3 +72,52 @@ report, err := q.PerformanceReport(ctx)
 ```bash
 go test -run '^$' -bench . -benchtime 10x ./...
 ```
+
+## Разобранные примеры
+
+### Прочитать план, прежде чем верить запросу
+
+```go
+q := db.Orders.Query().
+    Where(Orders.CustomerID.Eq(id)).
+    OrderBy(Orders.PlacedAt.Desc()).
+    Limit(20)
+
+plan, err := q.Explain(ctx)
+fmt.Println(plan.TotalCost, plan.PlanRows)
+```
+
+`Explain` не выполняет оператор. `ExplainAnalyze` выполняет — поэтому у них
+разные имена: запуск второго на `DELETE` удаляет.
+
+### Группировка медленных запросов по форме
+
+```go
+fp, err := q.Fingerprint()
+metrics.Observe(fp.String(), elapsed)
+```
+
+Два вызова с разными идентификаторами клиента дают один отпечаток; тот же запрос
+с другим `LIMIT` — другой, потому что маленький лимит и заставляет планировщик
+выбрать индекс, который иначе он пропустил бы.
+
+### Проверка формы запроса в юнит-тесте
+
+```go
+report, err := q.Diagnostics()   // база не нужна
+if report.Joins > 3 {
+    t.Errorf("this grew a join nobody meant to add")
+}
+```
+
+### Считать запросы, а не догадываться
+
+```go
+db := domain.New(orm.Traced(pool, counter))
+
+_, _ = db.Customers.Query().With(Customers.Orders).All(ctx)
+// counter увидел 2 оператора, сколько бы ни было строк
+```
+
+Трейсер — честный способ утверждать, что N+1 нет: число наблюдают, а не выводят
+рассуждением.

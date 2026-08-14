@@ -80,3 +80,53 @@ rows, _ := orm.Select(db.Users, Summaries).All(ctx)
 ## Ошибки
 
 Ошибки-сентинелы (`ErrNotFound`, `ErrMissingWhere`) оборачиваются, а не подменяются, поэтому `errors.Is` работает сквозь контекст каждого слоя, а собственный `*pgconn.PgError` остаётся доступен через `errors.As`. Ни один экспортированный API не паникует из-за плохого запроса, ошибки базы или неудачного сканирования.
+
+## Разобранные примеры
+
+### Как читать тип дескриптора
+
+Тип и есть документация. Когда непонятно, что умеет колонка, объявление отвечает:
+
+```go
+Products.Name      // orm.TextCol[Product]              — Like, ILike
+Products.PriceCents // orm.OrdCol[Product, int32]       — Gt, Between, Asc
+Products.Discount  // orm.NullOrdCol[Product, int32]    — то же плюс IsNull
+Products.Tags      // orm.Col[Product, []string]        — только равенство
+Products.Meta      // orm.Col[Product, map[string]any]  — только равенство
+```
+
+Метод, который вы ожидали и не нашли, — обычно ответ «PostgreSQL не определяет
+этого для такого типа».
+
+### Один источник или два
+
+```go
+managers := Employees.As("mgr")
+
+orm.Compose(pool, shape).
+    From(Employees.Source()).
+    LeftJoin(managers.Source(), orm.Eq(managers.ID, Employees.ManagerID))
+```
+
+`Employees.ID` и `managers.ID` — одна и та же колонка двух разных вхождений, и
+компилятор не позволит подменить одно другим. Именно это делает self-join
+безопасным, а не упражнением в именовании.
+
+### Три состояния связи
+
+```go
+p, _ := db.Products.Query().Where(Products.ID.Eq(id)).One(ctx)
+reviews, ok := p.Reviews.Get()
+
+switch {
+case !ok:
+    // не загружено — никто не просил
+case len(reviews) == 0:
+    // загружено, и их действительно нет
+default:
+    // загружено, и вот они
+}
+```
+
+Первый случай другие библиотеки схлопывают во второй — так «отзывов нет»
+оказывается на странице, которая отзывов не запрашивала.

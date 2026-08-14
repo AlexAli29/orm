@@ -106,3 +106,75 @@ strategy:
   matrix:
     postgres: ['14', '15', '16', '17', '18']
 ```
+
+## Разобранные примеры
+
+### Тест, который ничего после себя не оставляет
+
+```go
+func TestPlaceOrder(t *testing.T) {
+    ormtest.TxFunc(t, pool, func(ex orm.Executor) {
+        db := domain.New(ex)
+
+        customer, err := db.Customers.Insert(t.Context(), Customer{Email: "a@example.com"})
+        if err != nil {
+            t.Fatal(err)
+        }
+        order, err := db.Orders.Insert(t.Context(), Order{CustomerID: customer.ID})
+        if err != nil {
+            t.Fatal(err)
+        }
+        if order.ID == 0 {
+            t.Error("the insert returned no key")
+        }
+    })
+}
+```
+
+Всё откатывается при выходе из колбэка, поэтому тесты можно запускать в любом
+порядке и ни один не видит строк другого.
+
+### Сброс фикстур между наборами
+
+```go
+func resetFixtures(t *testing.T, pool *pgxpool.Pool) {
+    ormtest.MustTruncate(t, pool, domain.OrderLines, domain.Orders, domain.Customers)
+}
+```
+
+Перечисление таблиц одним вызовом и позволяет им ссылаться друг на друга без
+`Cascade`.
+
+### Проверка, что схема — та, которую вы объявили
+
+```go
+func TestMain(m *testing.M) {
+    if err := ormtest.CheckSchema(context.Background(), "orm.yaml"); err != nil {
+        log.Fatalf("the test database is not the declared schema: %v", err)
+    }
+    os.Exit(m.Run())
+}
+```
+
+Это превращает «тест странно упал» в «база отстала на миграцию», а это гораздо
+более короткий разбор.
+
+### Проверка запроса без базы
+
+```go
+sql, args, err := db.Orders.Query().
+    Where(Orders.CustomerID.Eq(7)).
+    OrderBy(Orders.PlacedAt.Desc()).
+    SQL()
+
+if !strings.Contains(sql, "ORDER BY") {
+    t.Error("the ordering was dropped")
+}
+if len(args) != 1 {
+    t.Errorf("args = %d, want the customer id as a parameter", len(args))
+}
+```
+
+Полезно для формы. Не замена запуску: SQL, который выглядит правильным и
+возвращает не те строки, — тот самый режим отказа, против которого выстроен весь
+проект.

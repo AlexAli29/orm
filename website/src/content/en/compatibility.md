@@ -42,3 +42,56 @@ The public API is frozen at v1 and tracked by a generated manifest. A removed sy
 ## Extensions
 
 `citext`, `hstore`, `pg_trgm`, `uuid-ossp` and PostGIS are recognised when present. None is required, and the ORM never creates an extension — that is a privileged operation belonging to whoever owns the database.
+
+## Worked examples
+
+### A CI matrix that cannot quietly shrink
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    postgres: ['14', '15', '16', '17', '18']
+```
+
+And the test that refuses to run on fewer, rather than reporting a five-version
+claim proven by however many servers happened to be up:
+
+```go
+func requireEveryMajor(t *testing.T) map[string]string {
+    var missing []string
+    for _, v := range []string{"14", "15", "16", "17", "18"} {
+        if os.Getenv("PG_DSN_"+v) == "" {
+            missing = append(missing, v)
+        }
+    }
+    if len(missing) > 0 {
+        t.Fatalf("missing servers for %v; skipping here would report a claim "+
+            "nobody proved", missing)
+    }
+    return nil
+}
+```
+
+### Pinning the Go floor and proving it
+
+```yaml
+- name: the library builds on its declared floor
+  env:
+    GOTOOLCHAIN: local     # do not silently fetch a newer Go
+  run: go build ./...
+```
+
+Without `GOTOOLCHAIN=local`, a newer toolchain is fetched on demand and the floor
+is never tested.
+
+### Making an optional extension mandatory in CI
+
+```yaml
+- env:
+    ORM_REQUIRE_POSTGIS: '1'
+  run: go test ./postgis/...
+```
+
+The spatial suite skips when PostGIS is absent, which is right on a laptop and
+wrong in CI. The variable turns the skip into a failure.

@@ -162,3 +162,72 @@ PostgreSQL 17 с PostGIS 3.5, 16 с 3.4 и 14 с 3.4.
 
 Библиотека никогда не создаёт расширение. `CREATE EXTENSION postgis` —
 привилегированная операция того, кто владеет базой.
+
+## Разобранные примеры
+
+### Магазины рядом
+
+```go
+here := postgis.GeographyPoint(lon, lat)
+
+type Near struct {
+    Name   string
+    Metres float64
+}
+
+distance := postgis.OfGeog(Shops.Spot).Distance(postgis.GeogValue[Shop](here))
+
+var near = orm.Project2(
+    Shops.Name, distance,
+    func(name string, m float64) Near { return Near{name, m} },
+)
+
+rows, err := orm.Select(db.Shops, near).
+    Where(postgis.OfGeog(Shops.Spot).DWithin(postgis.GeogValue[Shop](here), 2000)).
+    OrderBy(distance.Asc()).
+    Limit(10).
+    All(ctx)
+```
+
+Важно, что `DWithin` идёт до `Distance`: первый может воспользоваться
+пространственным индексом, второй — нет. Сначала отфильтровать, потом
+отсортировать — это разница между запросом и полным сканированием.
+
+### Какая зона доставки покрывает адрес
+
+```go
+zone, err := db.Zones.Query().
+    Where(postgis.Of(Zones.Area).Contains(postgis.Of(Addresses.Point))).
+    One(ctx)
+```
+
+### Прямоугольник видимой области карты
+
+```go
+box := postgis.MakeEnvelope(west, south, east, north, 4326)
+
+pins, err := db.Pins.Query().
+    Where(postgis.Of(Pins.Location).BBoxIntersects(box)).
+    Limit(500).
+    All(ctx)
+```
+
+`BBoxIntersects` — это `&&`, сравнение ограничивающих рамок. Для прямоугольной
+области это ровно тот вопрос, который нужен, и он дешёвый.
+
+### Выгрузка для картового клиента
+
+```go
+var geo = orm.Project2(
+    Zones.Name, postgis.Of(Zones.Area).AsGeoJSON(),
+    func(name, geom string) Feature { return Feature{name, geom} },
+)
+```
+
+### Регистрация типов
+
+```go
+cfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+    return postgis.Register(ctx, conn)
+}
+```

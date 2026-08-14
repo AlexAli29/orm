@@ -63,3 +63,35 @@ Users.Email.IsNull() // не компилируется
 - [Установка](/ru/docs/installation/) — модуль и CLI.
 - [Быстрый старт](/ru/docs/quickstart/) — схема, структура и запрос за несколько минут.
 - [Ключевые идеи](/ru/docs/concepts/) — словарь, которым пользуется остальная документация.
+
+## Разобранные примеры
+
+Пример того, что делает за вас компилятор, — в четырёх несвязанных схемах.
+
+```go
+// Магазин. У текста есть Like, и компилятор это знает, потому что так сказал каталог.
+db.Products.Query().Where(Products.Name.ILike("%lamp%"))
+
+// Бухгалтерия. Проверка баланса в WHERE, поэтому овердрафт — это обновление,
+// не нашедшее строк, а не гонка.
+db.Accounts.Update(ctx).
+    SetExpr(Accounts.Balance, Accounts.Balance.Sub(amount)).
+    Where(Accounts.ID.Eq(id)).
+    Where(Accounts.Balance.Gte(amount)).
+    Exec(ctx)
+
+// Календарь. Пересечение — один предикат, а не четыре сравнения, которые надо не перепутать.
+db.Bookings.Query().Where(Bookings.During.Overlaps(orm.ClosedOpen(from, to)))
+
+// Автопарк. Три уровня за три запроса, сколько бы ни было строк.
+db.Depots.Query().With(Depots.Vehicles.With(Vehicles.Services)).All(ctx)
+```
+
+И четыре вещи, которые не компилируются, — то же утверждение с другой стороны:
+
+```go
+Products.PriceCents.ILike("%")          // у целого числа нет ILike
+Products.Name.IsNull()                  // name объявлена NOT NULL
+db.Accounts.Query().Where(Products.Name.Eq("x"))  // не та сущность
+orm.UnionAll[Row](byEmail, byAge)       // ветви расходятся по форме
+```

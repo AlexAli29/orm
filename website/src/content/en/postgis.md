@@ -161,3 +161,72 @@ nobody should believe.
 
 The ORM never creates the extension. `CREATE EXTENSION postgis` is a privileged
 operation belonging to whoever owns the database.
+
+## Worked examples
+
+### Shops near me
+
+```go
+here := postgis.GeographyPoint(lon, lat)
+
+type Near struct {
+    Name   string
+    Metres float64
+}
+
+distance := postgis.OfGeog(Shops.Spot).Distance(postgis.GeogValue[Shop](here))
+
+var near = orm.Project2(
+    Shops.Name, distance,
+    func(name string, m float64) Near { return Near{name, m} },
+)
+
+rows, err := orm.Select(db.Shops, near).
+    Where(postgis.OfGeog(Shops.Spot).DWithin(postgis.GeogValue[Shop](here), 2000)).
+    OrderBy(distance.Asc()).
+    Limit(10).
+    All(ctx)
+```
+
+`DWithin` before `Distance` matters: the first can use a spatial index, the
+second cannot. Filtering then sorting is the difference between a query and a
+full scan.
+
+### Which delivery zone covers an address
+
+```go
+zone, err := db.Zones.Query().
+    Where(postgis.Of(Zones.Area).Contains(postgis.Of(Addresses.Point))).
+    One(ctx)
+```
+
+### A bounding box for a map viewport
+
+```go
+box := postgis.MakeEnvelope(west, south, east, north, 4326)
+
+pins, err := db.Pins.Query().
+    Where(postgis.Of(Pins.Location).BBoxIntersects(box)).
+    Limit(500).
+    All(ctx)
+```
+
+`BBoxIntersects` is `&&`, which compares bounding boxes. For a rectangular
+viewport that is the exact question, and it is the cheap one.
+
+### Exporting for a map client
+
+```go
+var geo = orm.Project2(
+    Zones.Name, postgis.Of(Zones.Area).AsGeoJSON(),
+    func(name, geom string) Feature { return Feature{name, geom} },
+)
+```
+
+### Registering the types
+
+```go
+cfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+    return postgis.Register(ctx, conn)
+}
+```

@@ -106,3 +106,73 @@ report := ormhealth.Deep(ctx, pool,
 ```
 
 `WithMigrationState` is the one that catches the deploy that half-happened: the pool is up, the queries work, and the schema is a version behind. Liveness says fine; this says otherwise.
+
+## Worked examples
+
+### Wiring it once, at startup
+
+```go
+func main() {
+    pool, err := pgxpool.NewWithConfig(ctx, cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer pool.Close()
+
+    tracer := ormslog.New(logger,
+        ormslog.WithSQL(true),
+        ormslog.WithSlowThreshold(200*time.Millisecond),
+        ormslog.WithRawSQL(false))
+
+    db := domain.New(orm.Traced(pool, tracer))
+    // nothing below this line mentions telemetry
+}
+```
+
+### A readiness endpoint that knows about migrations
+
+```go
+http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+    report := ormhealth.Deep(r.Context(), pool,
+        ormhealth.WithMigrationState("migrations"),
+        ormhealth.WithSchemaCheck("orm.yaml"))
+    if report.Status != ormhealth.StatusUp {
+        w.WriteHeader(http.StatusServiceUnavailable)
+    }
+    writeJSON(w, report)
+})
+
+http.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+    if ormhealth.Quick(r.Context(), pool).Status != ormhealth.StatusUp {
+        w.WriteHeader(http.StatusServiceUnavailable)
+    }
+})
+```
+
+Liveness asks whether the process should be restarted. Readiness asks whether it
+should receive traffic — and a pod whose schema is a version behind should not,
+which is the failure `WithMigrationState` exists to catch.
+
+### Both a log and a span
+
+```go
+type Multi []observe.Tracer
+
+func (m Multi) Start(ctx context.Context, e observe.StartEvent) context.Context {
+    for _, t := range m {
+        ctx = t.Start(ctx, e)
+    }
+    return ctx
+}
+
+func (m Multi) End(ctx context.Context, e observe.EndEvent) {
+    for i := len(m) - 1; i >= 0; i-- {
+        m[i].End(ctx, e)
+    }
+}
+
+db := domain.New(orm.Traced(pool, Multi{slogTracer, otelTracer}))
+```
+
+Wrapping `Traced` twice does not do this — the inner tracer is never called, and
+nothing reports the mistake.

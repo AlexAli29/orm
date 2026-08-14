@@ -62,3 +62,72 @@ err := orm.RunTx(ctx, pool, func(ex orm.Executor) error {
 ## What a transaction is not
 
 It is not a unit of work that tracks what you changed. There is no dirty tracking and no flush: a statement runs when you call it. That makes the statement order in the log the statement order in your code, which is the property you want at 3am.
+
+## Worked examples
+
+### A transfer between accounts
+
+Both legs or neither. The classic, and the reason the callback shape exists:
+
+```go
+err := db.Tx(ctx, func(tx *domain.DB) error {
+    if _, err := tx.Accounts.Update(ctx).
+        SetExpr(Accounts.Balance, Accounts.Balance.Sub(amount)).
+        Where(Accounts.ID.Eq(from)).
+        Where(Accounts.Balance.Gte(amount)).   // refuses to go negative
+        Exec(ctx); err != nil {
+        return err
+    }
+    _, err := tx.Accounts.Update(ctx).
+        SetExpr(Accounts.Balance, Accounts.Balance.Add(amount)).
+        Where(Accounts.ID.Eq(to)).
+        Exec(ctx)
+    return err
+})
+```
+
+The balance check is in the `WHERE` rather than in Go, so an overdraft is an
+update that matched no rows rather than a race.
+
+### An order and its lines
+
+```go
+err := db.Tx(ctx, func(tx *domain.DB) error {
+    order, err := tx.Orders.Insert(ctx, Order{CustomerID: id})
+    if err != nil {
+        return err
+    }
+    for i := range lines {
+        lines[i].OrderID = order.ID   // the key the insert handed back
+    }
+    _, err = tx.OrderLines.InsertMany(ctx, lines)
+    return err
+})
+```
+
+### A worker claiming a batch
+
+`SKIP LOCKED` is what lets two workers run the same query and never collide:
+
+```go
+err := db.Tx(ctx, func(tx *domain.DB) error {
+    jobs, err := tx.Jobs.Query().
+        Where(Jobs.State.Eq("queued")).
+        OrderBy(Jobs.Priority.Desc(), Jobs.QueuedAt.Asc()).
+        Limit(20).
+        Lock(orm.ForUpdateStrong, orm.SkipLocked()).
+        All(ctx)
+    if err != nil {
+        return err
+    }
+    for _, j := range jobs {
+        if _, err := tx.Jobs.Update(ctx).
+            Set(Jobs.State, "running").
+            Where(Jobs.ID.Eq(j.ID)).
+            Exec(ctx); err != nil {
+            return err
+        }
+    }
+    return nil
+})
+```

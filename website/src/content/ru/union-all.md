@@ -131,3 +131,68 @@ SELECT ... WHERE label = $2
 ## Один запрос
 
 Составной запрос — это один SQL-оператор. Это никогда не два запроса, строки которых складываются в Go: так потерялись бы общий `ORDER BY` и `LIMIT`, а один поход к серверу стал бы двумя.
+
+## Разобранные примеры
+
+### Одна лента активности из трёх таблиц
+
+Комментарии, лайки и подписки, перемешанные по времени. Одинаковую форму им
+задаёт проекция:
+
+```go
+type Item struct {
+    At   time.Time
+    Kind string
+    Text string
+}
+
+feed := func(at orm.Expression[time.Time, *time.Time], kind string,
+    text orm.Expression[string, *string]) orm.Projection[orm.Composed, Item] {
+    return orm.Project3(at, orm.Val(kind), text,
+        func(a time.Time, k, t string) Item { return Item{a, k, t} })
+}
+
+when := orm.Named("at", orm.Of(Comments.PostedAt))
+
+rows, err := orm.UnionAll[Item](
+    orm.Compose(pool, feed(orm.Of(Comments.PostedAt), "comment", orm.Of(Comments.Body))).
+        From(Comments.Source()),
+    orm.Compose(pool, feed(orm.Of(Likes.LikedAt), "like", orm.Of(Likes.Target))).
+        From(Likes.Source()),
+    orm.Compose(pool, feed(orm.Of(Follows.At), "follow", orm.Of(Follows.Handle))).
+        From(Follows.Source()),
+).OrderBy(when.Desc()).Limit(50).All(ctx)
+```
+
+Три таблицы, один оператор, один `ORDER BY` по всему результату. Забирать каждую
+отдельно и сливать в Go значило бы получить все три целиком, прежде чем взять
+пятьдесят свежайших.
+
+### Живые строки и архивные
+
+Одна и та же форма из двух таблиц, которые суть одна таблица, разделённая по
+возрасту:
+
+```go
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Orders.Source()).
+        Where(orm.Cond(Orders.PlacedAt.Gte(cutoff))),
+    orm.Compose(pool, shape).From(ArchivedOrders.Source()).
+        Where(orm.Cond(ArchivedOrders.PlacedAt.Lt(cutoff))),
+).All(ctx)
+```
+
+### Лимиты ветвей и лимит составного запроса
+
+```go
+// По две свежайших из каждой, затем три свежайших в целом.
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Inbox.Source()).
+        OrderBy(orm.Of(Inbox.At).Desc()).Limit(2),
+    orm.Compose(pool, shape).From(Archive.Source()).
+        OrderBy(orm.Of(Archive.At).Desc()).Limit(2),
+).OrderBy(when.Desc()).Limit(3).All(ctx)
+```
+
+Забираются четыре строки, возвращаются три. Лимиты ветвей заключены в скобки,
+поэтому остаются лимитами ветвей.

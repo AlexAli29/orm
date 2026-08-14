@@ -260,6 +260,8 @@ func TestDocs_methodsExist(t *testing.T) {
 		"Exit": true, "Routes": true, "Handler": true, "WithImage": true,
 		"WithErrorMessages": true, "WithMigrationState": true, "Rows": true,
 		"Text": true, "WithSchemaCheck": true, "Quick": true, "Deep": true,
+		"Done": true, "HandleFunc": true, "NewTicker": true, "Stop": true,
+		"WriteHeader": true, "Observe": true,
 	}
 
 	var misses []string

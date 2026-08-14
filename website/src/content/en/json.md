@@ -107,3 +107,65 @@ A containment query wants a GIN index:
 
 `jsonb_path_ops` is smaller and faster for `@>` alone but supports fewer
 operators — declare it as an expression index when you want it.
+
+## Worked examples
+
+### Feature flags on an account
+
+```go
+settings := orm.Opt(Accounts.Settings)
+
+// Accounts that have opted into the beta.
+orm.Compose(pool, shape).From(Accounts.Source()).
+    Where(orm.JSONContains(settings, orm.Val(map[string]any{"beta": true})))
+
+// Accounts where the key was never set at all — a different question.
+orm.Compose(pool, shape).From(Accounts.Source()).
+    Where(orm.Not(orm.JSONHasKey(settings, "beta")))
+```
+
+`Contains` asks about the value; `HasKey` asks whether anyone decided. A flag
+that is absent and a flag that is `false` are different states, and this is how
+you keep them apart.
+
+### An event payload
+
+Reading a nested value out and comparing it as a number:
+
+```go
+payload := orm.Opt(Events.Payload)
+
+amount := orm.CastNull(orm.JSONPathText(payload, "order", "total"), orm.Integer)
+
+var big = orm.Project2(
+    orm.Of(Events.ID), amount,
+    func(id int64, total *int32) Big { return Big{id, total} },
+)
+
+orm.Compose(pool, big).From(Events.Source()).
+    Where(orm.JSONPathExists(payload, "$.order.total")).
+    All(ctx)
+```
+
+The cast is where the type is decided. `->>` gives text whatever the document
+holds, and a comparison against a number has to say so.
+
+### A profile document, edited in place
+
+```go
+db.Profiles.Update(ctx).
+    SetExpr(Profiles.Doc,
+        orm.JSONSet(Profiles.Doc, []string{"contact", "email"}, newEmail, true)).
+    Where(Profiles.ID.Eq(id)).
+    Exec(ctx)
+```
+
+`true` is `create_missing`: add `contact.email` when the path is not there. With
+`false` the update is a no-op on a document that never had it.
+
+### Shape questions
+
+```go
+orm.JSONTypeOf(orm.Opt(Events.Payload))       // "object", "array", "string"…
+orm.JSONArrayLength(orm.Opt(Events.Items))    // *int32, NULL if not an array
+```

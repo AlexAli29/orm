@@ -106,3 +106,73 @@ report := ormhealth.Deep(ctx, pool,
 ```
 
 `WithMigrationState` ловит наполовину случившийся деплой: пул поднят, запросы работают, а схема на версию отстала. Liveness скажет «нормально»; эта проверка — нет.
+
+## Разобранные примеры
+
+### Подключение один раз, на старте
+
+```go
+func main() {
+    pool, err := pgxpool.NewWithConfig(ctx, cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer pool.Close()
+
+    tracer := ormslog.New(logger,
+        ormslog.WithSQL(true),
+        ormslog.WithSlowThreshold(200*time.Millisecond),
+        ormslog.WithRawSQL(false))
+
+    db := domain.New(orm.Traced(pool, tracer))
+    // ниже этой строки телеметрия не упоминается
+}
+```
+
+### Эндпоинт готовности, знающий про миграции
+
+```go
+http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+    report := ormhealth.Deep(r.Context(), pool,
+        ormhealth.WithMigrationState("migrations"),
+        ormhealth.WithSchemaCheck("orm.yaml"))
+    if report.Status != ormhealth.StatusUp {
+        w.WriteHeader(http.StatusServiceUnavailable)
+    }
+    writeJSON(w, report)
+})
+
+http.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+    if ormhealth.Quick(r.Context(), pool).Status != ormhealth.StatusUp {
+        w.WriteHeader(http.StatusServiceUnavailable)
+    }
+})
+```
+
+Liveness спрашивает, надо ли перезапустить процесс. Readiness — надо ли слать ему
+трафик; поду, у которого схема на версию отстала, слать не надо, и ради этого
+случая существует `WithMigrationState`.
+
+### И лог, и спан
+
+```go
+type Multi []observe.Tracer
+
+func (m Multi) Start(ctx context.Context, e observe.StartEvent) context.Context {
+    for _, t := range m {
+        ctx = t.Start(ctx, e)
+    }
+    return ctx
+}
+
+func (m Multi) End(ctx context.Context, e observe.EndEvent) {
+    for i := len(m) - 1; i >= 0; i-- {
+        m[i].End(ctx, e)
+    }
+}
+
+db := domain.New(orm.Traced(pool, Multi{slogTracer, otelTracer}))
+```
+
+Двойная обёртка `Traced` этого не даёт: внутренний трейсер не вызывается никогда,
+и об ошибке никто не сообщает.

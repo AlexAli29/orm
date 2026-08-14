@@ -86,3 +86,74 @@ The error arrives as PostgreSQL's own. Rewriting it into a generic "refresh fail
 ## Concurrent refresh, chosen deterministically
 
 When several indexes qualify, the lowest name wins. It has to be deterministic: the generated descriptor and the fingerprint computed from it must name the same index on two runs over one schema, or every regeneration produces a diff.
+
+## Worked examples
+
+### A reporting view
+
+```go
+//orm:view analytics.monthly_revenue
+//orm:definition `SELECT date_trunc('month', issued_at) AS month,
+//                       plan, sum(amount_cents) AS cents
+//                  FROM billing.invoices GROUP BY 1, 2`
+//orm:depends-on billing.invoices
+type MonthlyRevenue struct {
+    Month time.Time
+    Plan  string
+    Cents int64
+}
+```
+
+Every column comes back nullable, because a view's output nullability is not
+provable — `sum` over no rows is NULL and the definition does not record which
+columns can be.
+
+### A materialized view that refreshes concurrently
+
+```go
+//orm:materialized-view analytics.search_index
+//orm:definition `SELECT p.id, p.name, p.tags FROM catalog.products p WHERE p.listed`
+//orm:depends-on catalog.products
+//orm:index search_index_id_key (ID) unique
+type SearchRow struct {
+    ID   int64
+    Name string
+    Tags []string
+}
+```
+
+The unique index over one plain column is what makes `Concurrently` possible.
+Without it the refresh takes an exclusive lock and the site stops serving while
+it runs.
+
+```go
+if err := db.SearchRows.Refresh(ctx, orm.Concurrently()); err != nil {
+    var pge *pgconn.PgError
+    if errors.As(err, &pge) && pge.Code == "55000" {
+        // the index is gone; regenerate and redeploy
+    }
+    return err
+}
+```
+
+### Refreshing on a schedule
+
+```go
+func refreshLoop(ctx context.Context, db *domain.DB) {
+    t := time.NewTicker(5 * time.Minute)
+    defer t.Stop()
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-t.C:
+            if err := db.SearchRows.Refresh(ctx, orm.Concurrently()); err != nil {
+                log.Printf("refresh: %v", err)
+            }
+        }
+    }
+}
+```
+
+A concurrent refresh does not block readers, so a five-minute tick is a cost in
+CPU rather than in availability.

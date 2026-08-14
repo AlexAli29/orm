@@ -107,3 +107,61 @@ if errors.Is(err, orm.ErrCalendarInterval) {
 ## Unsupported types are refused
 
 A column whose type has no mapping stops generation with a diagnostic naming the column, the type and the fix. It never degrades to `any`, `string` or `[]byte` — a placeholder that scans is worse than a build failure, because it fails later and further away.
+
+## Worked examples
+
+### Money, without float
+
+```go
+//orm:table public.invoices
+type Invoice struct {
+    ID    int64   `orm:"pk,identity"`
+    Cents int64                                  // the simple answer
+    Total decimal.Decimal `orm:"pgtype:numeric"` // the exact one
+}
+```
+
+Integer cents is fine until you need a third decimal place or a rate. `numeric`
+is exact at any scale, and mapping it requires a `types.numeric` entry — the ORM
+will not pick a decimal package for you.
+
+### Addresses and networks
+
+```go
+//orm:table public.sessions
+type Session struct {
+    ID     int64        `orm:"pk,identity"`
+    Client netip.Addr   `orm:"pgtype:inet"`
+    Subnet netip.Prefix `orm:"pgtype:cidr"`
+    Device net.HardwareAddr `orm:"pgtype:macaddr"`
+}
+```
+
+These order and index as addresses rather than as text, so a range of a subnet is
+a range and not a `LIKE`.
+
+### Arrays that mean something
+
+```go
+//orm:table public.articles
+type Article struct {
+    ID      int64      `orm:"pk,identity"`
+    Tags    []string                        // NOT NULL, may be empty
+    Authors *[]int64                        // nullable: no list at all
+}
+```
+
+An empty array and a NULL array are different values and the ORM keeps them
+different. Which you want is a schema decision, and the pointer is how you say it.
+
+### A domain, so the type carries the rule
+
+```go
+// CREATE DOMAIN email AS citext CHECK (VALUE ~ '@');
+type Contact struct {
+    Address string `orm:"pgtype:public.email"`
+}
+```
+
+Reconciliation follows the domain to `citext` and maps it to `string`. Name it
+schema-qualified, or the migrated and introspected names will not compare equal.

@@ -86,3 +86,74 @@ if err := db.UserSummaries.Refresh(ctx, orm.Concurrently()); err != nil {
 ## Выбор индекса детерминирован
 
 Когда подходит несколько индексов, побеждает наименьшее имя. Иначе нельзя: сгенерированный дескриптор и отпечаток, посчитанный по нему, обязаны называть один и тот же индекс на двух прогонах по одной схеме, иначе каждая перегенерация даёт диф.
+
+## Разобранные примеры
+
+### Отчётное представление
+
+```go
+//orm:view analytics.monthly_revenue
+//orm:definition `SELECT date_trunc('month', issued_at) AS month,
+//                       plan, sum(amount_cents) AS cents
+//                  FROM billing.invoices GROUP BY 1, 2`
+//orm:depends-on billing.invoices
+type MonthlyRevenue struct {
+    Month time.Time
+    Plan  string
+    Cents int64
+}
+```
+
+Все колонки приходят nullable, потому что nullability результата представления
+недоказуема: `sum` по пустому множеству — это NULL, а определение не хранит,
+какие колонки такими быть могут.
+
+### Матпредставление с конкурентным обновлением
+
+```go
+//orm:materialized-view analytics.search_index
+//orm:definition `SELECT p.id, p.name, p.tags FROM catalog.products p WHERE p.listed`
+//orm:depends-on catalog.products
+//orm:index search_index_id_key (ID) unique
+type SearchRow struct {
+    ID   int64
+    Name string
+    Tags []string
+}
+```
+
+Уникальный индекс по одной обычной колонке — то, что делает `Concurrently`
+возможным. Без него обновление берёт монопольную блокировку, и сайт не отвечает,
+пока оно идёт.
+
+```go
+if err := db.SearchRows.Refresh(ctx, orm.Concurrently()); err != nil {
+    var pge *pgconn.PgError
+    if errors.As(err, &pge) && pge.Code == "55000" {
+        // индекса нет; перегенерировать и выкатить
+    }
+    return err
+}
+```
+
+### Обновление по расписанию
+
+```go
+func refreshLoop(ctx context.Context, db *domain.DB) {
+    t := time.NewTicker(5 * time.Minute)
+    defer t.Stop()
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-t.C:
+            if err := db.SearchRows.Refresh(ctx, orm.Concurrently()); err != nil {
+                log.Printf("refresh: %v", err)
+            }
+        }
+    }
+}
+```
+
+Конкурентное обновление не блокирует читателей, поэтому тик раз в пять минут —
+это трата процессора, а не доступности.

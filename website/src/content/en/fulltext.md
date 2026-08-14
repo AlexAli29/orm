@@ -134,3 +134,67 @@ both  := orm.Concat2TSVector(title, body)
 
 `WeightA` through `WeightD` are what make a title match outrank a body match.
 Ranking reads them; matching ignores them.
+
+## Worked examples
+
+### A help centre
+
+Ranked results, with the query built once:
+
+```go
+q := orm.PlainToTSQuery(orm.English, input)
+rank := orm.TSRank(Articles.Search, q)
+
+var hits = orm.Project3(
+    Articles.Slug, Articles.Title, rank,
+    func(slug, title string, r float32) Hit { return Hit{slug, title, r} },
+)
+
+rows, err := orm.Select(db.Articles, hits).
+    Where(orm.Matches(Articles.Search, q)).
+    OrderBy(rank.Desc(), Articles.Title.Asc()).
+    Limit(20).
+    All(ctx)
+```
+
+The tie-break on title matters: without it, two equally ranked articles come back
+in whatever order the plan produced, which changes between runs.
+
+### A search box that accepts operators
+
+```go
+// Users may type: "index only" -bitmap
+q := orm.WebSearchToTSQuery(orm.English, input)
+```
+
+`WebSearchToTSQuery` handles quoted phrases, `OR`, and a leading minus, and it
+cannot fail on malformed input. `ToTSQuery` takes raw `& | ! <->` syntax and
+errors on a stray operator, so it belongs behind an admin form rather than in
+front of the public.
+
+### Weighting a title above a body
+
+```go
+title := orm.SetWeight(orm.ToTSVector(orm.English, Recipes.Title), orm.WeightA)
+body  := orm.SetWeight(orm.ToTSVector(orm.English, Recipes.Method), orm.WeightB)
+doc   := orm.Concat2TSVector(title, body)
+
+orm.Compose(pool, shape).From(Recipes.Source()).
+    Where(orm.Matches(doc, q)).
+    OrderBy(orm.TSRank(doc, q).Desc()).
+    All(ctx)
+```
+
+Computed like this it cannot use an index, so it suits an admin report. For the
+search path, store the weighted vector in a column and index it.
+
+### Filtering and searching together
+
+```go
+orm.Select(db.Articles, hits).
+    Where(Articles.Locale.Eq("en")).
+    Where(Articles.Published.Eq(true)).
+    Where(orm.Matches(Articles.Search, q)).
+    OrderBy(rank.Desc()).
+    All(ctx)
+```

@@ -127,3 +127,69 @@ Discrete ranges — `int4range`, `int8range`, `daterange` — come back in canon
 form, so `[1,10]` arrives as `[1,11)`. Every multirange is canonicalised too.
 That is the server's normalisation, not this package's, and the values you read
 are the values it holds.
+
+## Worked examples
+
+### A meeting room
+
+Double booking is one predicate, not a pair of comparisons you have to get right:
+
+```go
+wanted := orm.ClosedOpen(start, end)
+
+clash, err := db.Bookings.Query().
+    Where(Bookings.RoomID.Eq(roomID)).
+    Where(Bookings.During.Overlaps(wanted)).
+    Exists(ctx)
+```
+
+`ClosedOpen` is the right shape for time: a booking ending at 10:00 and one
+starting at 10:00 do not overlap, and `[start, end)` is what says so.
+
+### A price with a validity window
+
+The price in force on a date, and the rows that have no end yet:
+
+```go
+current, err := db.Tariffs.Query().
+    Where(Tariffs.ProductID.Eq(id)).
+    Where(Tariffs.Valid.Contains(on)).
+    One(ctx)
+
+open, err := db.Tariffs.Query().
+    Where(Tariffs.Valid.Overlaps(orm.RangeFrom(time.Now()))).
+    All(ctx)
+```
+
+### A rota
+
+Where cover ends and the next shift has not started — adjacency and gaps:
+
+```go
+// Shifts that touch without overlapping.
+db.Shifts.Query().Where(Shifts.Hours.Adjacent(other))
+
+// Everything entirely before a cutoff.
+db.Shifts.Query().Where(Shifts.Hours.StrictlyLeftOf(orm.RangeFrom(cutoff)))
+
+// The bounds, read in SQL.
+var span = orm.Project2(
+    Shifts.Hours.Lower(), Shifts.Hours.Upper(),
+    func(from, to *time.Time) Span { return Span{from, to} },
+)
+```
+
+Both bounds are nullable because an open-ended shift has no value there.
+
+### Availability as a multirange
+
+```go
+// Any of the free windows covers the whole appointment.
+db.Calendars.Query().Where(Calendars.Free.ContainsRange(appointment))
+
+// The span from first free minute to last, gaps included.
+var span = orm.Project1(
+    Calendars.Free.Merge(),
+    func(r orm.Range[time.Time]) orm.Range[time.Time] { return r },
+)
+```

@@ -265,3 +265,75 @@ n, err := orm.CopyColumns(ctx, db.Events, events, Events.ID, Events.Kind)
 
 A failing `COPY` fails as one statement — no part of it is applied. If it has to succeed together with other work, run it in a transaction.
 
+## Worked examples
+
+### An import that runs twice
+
+Idempotent by construction: the second run updates rather than duplicating.
+
+```go
+for _, row := range parsed {
+    _, err := db.Products.Insert(ctx, row,
+        orm.OnConflict(Products.SKU).DoUpdate(
+            Products.Name, Products.PriceCents, Products.UpdatedAt))
+    if err != nil {
+        return err
+    }
+}
+```
+
+For a large file, one statement per chunk instead of per row:
+
+```go
+for chunk := range slices.Chunk(parsed, 1000) {
+    if _, err := db.Products.InsertMany(ctx, chunk,
+        orm.OnConflict(Products.SKU).DoUpdate(Products.PriceCents)); err != nil {
+        return err
+    }
+}
+```
+
+### A booking that must not double-sell
+
+The write and the check are one statement, so nothing can slip between them:
+
+```go
+seat, err := db.Seats.Update(ctx).
+    Set(Seats.HeldBy, customerID).
+    Set(Seats.HeldUntil, time.Now().Add(10*time.Minute)).
+    Where(Seats.ID.Eq(seatID)).
+    Where(Seats.HeldBy.IsNull()).
+    Exec(ctx)
+if seat == 0 {
+    return ErrAlreadyHeld  // somebody else won
+}
+```
+
+The `HeldBy.IsNull()` in the `WHERE` is the lock. A read-then-write would have a
+gap; this does not.
+
+### A retention job
+
+Delete, and keep what was deleted for the audit log:
+
+```go
+gone, err := orm.DeleteReturningEntity(
+    db.Sessions.Delete(ctx).Where(Sessions.ExpiresAt.Lt(time.Now())),
+).All(ctx)
+
+for _, s := range gone {
+    recordAudit("session.expired", s.ID, s.UserID)
+}
+```
+
+### A counter that never reads first
+
+```go
+db.PageViews.Update(ctx).
+    SetExpr(PageViews.Hits, PageViews.Hits.Add(1)).
+    Where(PageViews.Path.Eq(path)).
+    Exec(ctx)
+```
+
+Reading the row, adding one in Go and writing it back loses increments under
+concurrency. This one cannot.

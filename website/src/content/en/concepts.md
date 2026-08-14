@@ -80,3 +80,54 @@ The second is source-induced nullability. It is why `orm.Opt` exists, and why a 
 ## Error handling
 
 Sentinels are wrapped rather than replaced, so `errors.Is` works through the context each layer adds, and PostgreSQL's own `*pgconn.PgError` stays reachable with `errors.As`. No exported API panics for a bad query, a database error or a failed scan.
+
+## Worked examples
+
+### Reading a descriptor's type
+
+The type is the documentation. When you are unsure what a column can do, the
+declaration says:
+
+```go
+Products.Name      // orm.TextCol[Product]              — Like, ILike
+Products.PriceCents // orm.OrdCol[Product, int32]       — Gt, Between, Asc
+Products.Discount  // orm.NullOrdCol[Product, int32]    — the above, plus IsNull
+Products.Tags      // orm.Col[Product, []string]        — equality only
+Products.Meta      // orm.Col[Product, map[string]any]  — equality only
+```
+
+A method you expected and cannot find is usually the answer to "PostgreSQL does
+not define that for this type".
+
+### One source, or two
+
+```go
+managers := Employees.As("mgr")
+
+orm.Compose(pool, shape).
+    From(Employees.Source()).
+    LeftJoin(managers.Source(), orm.Eq(managers.ID, Employees.ManagerID))
+```
+
+`Employees.ID` and `managers.ID` are the same column of two different
+occurrences, and the compiler will not let one stand for the other. That is what
+makes a self-join safe rather than a naming exercise.
+
+### The three states of a relation
+
+```go
+p, _ := db.Products.Query().Where(Products.ID.Eq(id)).One(ctx)
+reviews, ok := p.Reviews.Get()
+
+switch {
+case !ok:
+    // not loaded — nobody asked for it
+case len(reviews) == 0:
+    // loaded, and there genuinely are none
+default:
+    // loaded, and here they are
+}
+```
+
+The first case is the one other libraries collapse into the second, which is how
+"no reviews" ends up on a page that never asked for reviews.

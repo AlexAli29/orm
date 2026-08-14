@@ -106,3 +106,57 @@ db.Events.Query().OrderBy(Events.At.Desc())
 Для «за последние N» вычисляйте границу в Go, а не в SQL, когда это возможно:
 параметр привязки — лучший вход для планировщика, чем выражение, которое ему
 приходится вычислять на каждой строке.
+
+## Разобранные примеры
+
+### График регистраций по дням
+
+```go
+day := orm.DateTrunc(orm.Day, Accounts.CreatedAt)
+
+var perDay = orm.Project2(
+    day, orm.Count[Account](),
+    func(d time.Time, n int64) Point { return Point{d, n} },
+)
+
+rows, err := orm.Select(db.Accounts, perDay).
+    Where(Accounts.CreatedAt.Gte(since)).
+    GroupBy(day).
+    OrderBy(day.Asc()).
+    All(ctx)
+```
+
+По месяцам — тот же запрос с одним изменённым словом; ради этого корзину и
+называют.
+
+### Часы посещаемости
+
+```go
+hour := orm.Extract(orm.Hour, Visits.At, orm.Integer)
+dow  := orm.Extract(orm.DayOfWeek, Visits.At, orm.Integer)
+
+var heat = orm.Project3(
+    dow, hour, orm.Count[Visit](),
+    func(d, h int32, n int64) Cell { return Cell{d, h, n} },
+)
+
+orm.Select(db.Visits, heat).GroupBy(dow, hour).All(ctx)
+```
+
+### Пробный период, который истекает
+
+```go
+// Пробные периоды, кончающиеся в ближайшие трое суток.
+soon := time.Now().Add(72 * time.Hour)
+db.Trials.Query().Where(Trials.EndsAt.Between(time.Now(), soon))
+
+// Продление — в SQL, без предварительного чтения.
+db.Trials.Update(ctx).
+    SetExpr(Trials.EndsAt, orm.AddInterval(Trials.EndsAt, orm.Val(orm.IntervalOf(0, 14, 0)))).
+    Where(Trials.ID.Eq(id)).
+    Exec(ctx)
+```
+
+`IntervalOf(0, 14, 0)` — это четырнадцать **дней**, а не 336 часов. На границе
+перевода часов это разные моменты, и интервал сохраняет различие, которое
+`Duration` выбросил бы.

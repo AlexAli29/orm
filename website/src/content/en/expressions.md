@@ -150,3 +150,65 @@ db.Users.Query().Where(orm.Expr[User]("age(created_at) > interval ?", "1 year"))
 every `?` becomes a bind parameter, and the fragment's placeholders are counted
 against the arguments given, so a mismatch is a build error rather than a
 confusing server one.
+
+## Worked examples
+
+### A shipping band
+
+`CASE` turning a number into a label, in SQL, so it can be grouped by:
+
+```go
+band := orm.Case(orm.Cond(Parcels.Grams.Lt(500)), orm.Val("letter")).
+    When(orm.Cond(Parcels.Grams.Lt(2000)), orm.Val("small")).
+    When(orm.Cond(Parcels.Grams.Lt(20000)), orm.Val("parcel")).
+    Else(orm.Val("freight"))
+
+var byBand = orm.Project2(
+    band, orm.Count[orm.Composed](),
+    func(b string, n int64) Band { return Band{b, n} },
+)
+
+orm.Compose(pool, byBand).From(Parcels.Source()).GroupBy(band).All(ctx)
+```
+
+Doing this in Go would mean fetching every parcel to count four numbers.
+
+### A display name that is never empty
+
+```go
+name := orm.Coalesce(Members.Nickname, orm.Of(Members.Email))
+```
+
+`Nickname` is nullable, `Email` is not, so the result cannot be NULL and its type
+says `string`. The fallback chain is the proof, not a convention.
+
+### Treating blank as missing
+
+```go
+// An empty note is not a note.
+note := orm.NullIf(orm.Of(Tickets.Note), orm.Val(""))
+```
+
+### Case-insensitive matching that uses an index
+
+```go
+// With an index on lower(email), this can use it; ILike cannot.
+orm.Compose(pool, shape).From(Members.Source()).
+    Where(orm.Eq(orm.Lower(Members.Email), orm.Lower(orm.Val(input))))
+```
+
+### Something PostgreSQL has and this package does not wrap
+
+```go
+// greatest(stock - reserved, 0)
+available := orm.Fn[Item, int32]("greatest",
+    orm.ArgOf(Items.Stock.SubCol(Items.Reserved)),
+    orm.ArgValue(int32(0)))
+
+// A function returning boolean, used as a predicate.
+db.Items.Query().Where(orm.FnPredicate[Item]("pg_try_advisory_lock", orm.ArgOf(Items.ID)))
+```
+
+The type parameter is your promise about the return type. It is not checked
+against PostgreSQL, which is what makes this the escape hatch rather than the
+main road.

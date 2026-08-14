@@ -264,3 +264,75 @@ n, err := orm.CopyColumns(ctx, db.Events, events, Events.ID, Events.Kind)
 
 Упавший `COPY` падает как один оператор — не применяется ничего. Если он должен быть успешным вместе с другой работой, оберните в транзакцию.
 
+## Разобранные примеры
+
+### Импорт, который запускают дважды
+
+Идемпотентен по построению: второй запуск обновляет, а не дублирует.
+
+```go
+for _, row := range parsed {
+    _, err := db.Products.Insert(ctx, row,
+        orm.OnConflict(Products.SKU).DoUpdate(
+            Products.Name, Products.PriceCents, Products.UpdatedAt))
+    if err != nil {
+        return err
+    }
+}
+```
+
+Для большого файла — один оператор на пачку вместо одного на строку:
+
+```go
+for chunk := range slices.Chunk(parsed, 1000) {
+    if _, err := db.Products.InsertMany(ctx, chunk,
+        orm.OnConflict(Products.SKU).DoUpdate(Products.PriceCents)); err != nil {
+        return err
+    }
+}
+```
+
+### Бронирование, которое нельзя продать дважды
+
+Запись и проверка — один оператор, поэтому между ними ничто не вклинится:
+
+```go
+seat, err := db.Seats.Update(ctx).
+    Set(Seats.HeldBy, customerID).
+    Set(Seats.HeldUntil, time.Now().Add(10*time.Minute)).
+    Where(Seats.ID.Eq(seatID)).
+    Where(Seats.HeldBy.IsNull()).
+    Exec(ctx)
+if seat == 0 {
+    return ErrAlreadyHeld  // успел кто-то другой
+}
+```
+
+`HeldBy.IsNull()` в `WHERE` и есть блокировка. У «прочитать, потом записать» был
+бы зазор; здесь его нет.
+
+### Задача очистки
+
+Удалить и сохранить удалённое для журнала аудита:
+
+```go
+gone, err := orm.DeleteReturningEntity(
+    db.Sessions.Delete(ctx).Where(Sessions.ExpiresAt.Lt(time.Now())),
+).All(ctx)
+
+for _, s := range gone {
+    recordAudit("session.expired", s.ID, s.UserID)
+}
+```
+
+### Счётчик, который не читает сначала
+
+```go
+db.PageViews.Update(ctx).
+    SetExpr(PageViews.Hits, PageViews.Hits.Add(1)).
+    Where(PageViews.Path.Eq(path)).
+    Exec(ctx)
+```
+
+Прочитать строку, прибавить единицу в Go и записать обратно — значит терять
+инкременты при конкурентном доступе. Здесь это невозможно.

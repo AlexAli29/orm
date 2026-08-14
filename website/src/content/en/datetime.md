@@ -105,3 +105,57 @@ db.Events.Query().OrderBy(Events.At.Desc())
 For "within the last N", compute the boundary in Go rather than in SQL when you
 can — a bind parameter is a better plan input than an expression the planner has
 to evaluate per row.
+
+## Worked examples
+
+### A daily signup chart
+
+```go
+day := orm.DateTrunc(orm.Day, Accounts.CreatedAt)
+
+var perDay = orm.Project2(
+    day, orm.Count[Account](),
+    func(d time.Time, n int64) Point { return Point{d, n} },
+)
+
+rows, err := orm.Select(db.Accounts, perDay).
+    Where(Accounts.CreatedAt.Gte(since)).
+    GroupBy(day).
+    OrderBy(day.Asc()).
+    All(ctx)
+```
+
+Monthly is the same query with one word changed, which is the point of naming
+the bucket.
+
+### Opening hours
+
+```go
+hour := orm.Extract(orm.Hour, Visits.At, orm.Integer)
+dow  := orm.Extract(orm.DayOfWeek, Visits.At, orm.Integer)
+
+var heat = orm.Project3(
+    dow, hour, orm.Count[Visit](),
+    func(d, h int32, n int64) Cell { return Cell{d, h, n} },
+)
+
+orm.Select(db.Visits, heat).GroupBy(dow, hour).All(ctx)
+```
+
+### A trial that expires
+
+```go
+// Trials ending in the next three days.
+soon := time.Now().Add(72 * time.Hour)
+db.Trials.Query().Where(Trials.EndsAt.Between(time.Now(), soon))
+
+// Extending one, in SQL, without reading it first.
+db.Trials.Update(ctx).
+    SetExpr(Trials.EndsAt, orm.AddInterval(Trials.EndsAt, orm.Val(orm.IntervalOf(0, 14, 0)))).
+    Where(Trials.ID.Eq(id)).
+    Exec(ctx)
+```
+
+`IntervalOf(0, 14, 0)` is fourteen **days**, not 336 hours. Across a
+daylight-saving boundary those are different instants, and the interval keeps
+the distinction that a `Duration` would throw away.

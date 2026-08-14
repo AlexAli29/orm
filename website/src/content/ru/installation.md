@@ -77,3 +77,82 @@ orm check
 ```
 
 В пустом проекте это сообщит, что деклараций не найдено — правильный ответ, доказывающий, что CLI дотянулся до базы.
+
+## Разобранные примеры
+
+### Database-first, поверх существующей базы
+
+Ни `mode`, ни каталога миграций: авторитетна база, а вы пишете декларации,
+описывающие её:
+
+```yaml
+version: 1
+
+schema:
+  dsn: ${DATABASE_URL}
+  search_path:
+    - public
+    - reporting
+
+packages:
+  - path: ./internal/domain
+    output: same
+```
+
+### Managed с несколькими ограниченными контекстами
+
+У каждого контекста свой пакет, и генератор пишет рядом с каждым:
+
+```yaml
+version: 1
+
+schema:
+  mode: managed
+  dsn: ${DATABASE_URL}
+  search_path:
+    - public
+    - billing
+    - identity
+
+migrations:
+  dir: migrations
+
+packages:
+  - path: ./internal/billing/domain
+    output: same
+  - path: ./internal/identity/domain
+    output: same
+  - path: ./internal/catalog/domain
+    output: same
+```
+
+Два контекста могут владеть таблицами с одинаковым именем в разных схемах: у них
+будут разные дескрипторы и разное состояние миграций.
+
+### Типы, которых в Go нет
+
+```yaml
+types:
+  uuid:
+    go: github.com/google/uuid.UUID
+    codec: uuid
+  numeric:
+    go: github.com/shopspring/decimal.Decimal
+    codec: decimal
+```
+
+Это те два, которые библиотека отказывается выбирать за вас: популярные пакеты
+не взаимозаменяемы, а неверный `numeric` тихо портит деньги.
+
+### Makefile, который держит всё в согласии
+
+```makefile
+generate:
+	go run github.com/AlexAli29/orm/cmd/orm makemigrations
+	go run github.com/AlexAli29/orm/cmd/orm migrate
+	go run github.com/AlexAli29/orm/cmd/orm generate
+
+check:
+	go run github.com/AlexAli29/orm/cmd/orm makemigrations --check
+	go run github.com/AlexAli29/orm/cmd/orm check --generated
+```

@@ -164,3 +164,65 @@ rows, err := orm.Compose(pool, shape).
 ```
 
 Целиком этот рецепт — в разделе [Сложные запросы](/ru/docs/cookbook/insane/).
+
+## Разобранные примеры
+
+### Таблица лидеров с учётом равенства
+
+```go
+w := orm.Window().OrderBy(orm.Of(Scores.Points).Desc())
+
+var board = orm.Project3(
+    orm.Of(Scores.Player),
+    orm.Rank().Over(w),        // 1, 2, 2, 4 — равенство оставляет дыру
+    orm.DenseRank().Over(w),   // 1, 2, 2, 3 — не оставляет
+    func(p string, r, d int64) Row { return Row{p, r, d} },
+)
+
+orm.Compose(pool, board).From(Scores.Source()).All(ctx)
+```
+
+Какой вариант верен, зависит от того, должно ли существовать «третье место»,
+когда двое делят второе. Это продуктовое решение, и две функции позволяют его
+принять.
+
+### Изменение с прошлого показания
+
+```go
+w := orm.Window().
+    PartitionBy(orm.Of(Meters.MeterID)).
+    OrderBy(orm.Of(Meters.ReadAt).Asc())
+
+previous := orm.Lag(Meters.Value).Over(w)
+
+var deltas = orm.Project3(
+    orm.Of(Meters.MeterID), orm.Of(Meters.Value), previous,
+    func(id int64, now int32, before *int32) Delta { return Delta{id, now, before} },
+)
+```
+
+`before` — указатель, потому что у первого показания каждого счётчика позади
+ничего нет. Секционирование начинает отсчёт заново на каждом счётчике.
+
+### Нарастающий баланс
+
+```go
+running := orm.SumInt32[orm.Composed, int64](orm.Of(Entries.AmountCents)).
+    Over(orm.Window().
+        PartitionBy(orm.Of(Entries.AccountID)).
+        OrderBy(orm.Of(Entries.PostedAt).Asc()).
+        Rows(orm.UnboundedPreceding(), orm.CurrentRow()))
+```
+
+### Скользящее среднее за семь дней
+
+```go
+avg := orm.AvgInt64[orm.Composed, float64](orm.Of(Daily.Total)).
+    Over(orm.Window().
+        OrderBy(orm.Of(Daily.Day).Asc()).
+        Rows(orm.Preceding(6), orm.CurrentRow()))
+```
+
+`Rows(6 preceding, current)` — это семь строк вместе с текущей. `Range` вместо
+него сгруппировал бы дни с равными значениями, а скользящее среднее означает не
+это.

@@ -42,3 +42,57 @@ claim proven by however many servers happened to be running
 ## Расширения
 
 `citext`, `hstore`, `pg_trgm`, `uuid-ossp` и PostGIS распознаются, когда установлены. Ни одно не обязательно, и библиотека никогда не создаёт расширение — это привилегированная операция того, кто владеет базой.
+
+## Разобранные примеры
+
+### Матрица CI, которая не может тихо сократиться
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    postgres: ['14', '15', '16', '17', '18']
+```
+
+И тест, который отказывается запускаться на меньшем числе, вместо того чтобы
+объявить поддержку пяти версий, доказанную тем, сколько серверов оказалось
+поднято:
+
+```go
+func requireEveryMajor(t *testing.T) map[string]string {
+    var missing []string
+    for _, v := range []string{"14", "15", "16", "17", "18"} {
+        if os.Getenv("PG_DSN_"+v) == "" {
+            missing = append(missing, v)
+        }
+    }
+    if len(missing) > 0 {
+        t.Fatalf("missing servers for %v; skipping here would report a claim "+
+            "nobody proved", missing)
+    }
+    return nil
+}
+```
+
+### Зафиксировать минимальную версию Go и доказать её
+
+```yaml
+- name: the library builds on its declared floor
+  env:
+    GOTOOLCHAIN: local     # не тянуть молча более новый Go
+  run: go build ./...
+```
+
+Без `GOTOOLCHAIN=local` более новый тулчейн скачивается по требованию, и планка
+не проверяется никогда.
+
+### Сделать необязательное расширение обязательным в CI
+
+```yaml
+- env:
+    ORM_REQUIRE_POSTGIS: '1'
+  run: go test ./postgis/...
+```
+
+Пространственный набор пропускается, когда PostGIS нет: на ноутбуке это верно, в
+CI — нет. Переменная превращает пропуск в падение.

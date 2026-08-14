@@ -67,3 +67,51 @@ orm check --generated        # the committed generated code is current
 ```
 
 The first fails when somebody changed a struct and forgot to plan. The second fails when somebody planned and forgot to regenerate.
+
+## Worked examples
+
+### Adding a column safely
+
+Adding a nullable column is instant. Adding a `NOT NULL` one with no default
+rewrites the table and blocks writes while it does — so it is three migrations,
+not one:
+
+```go
+// 1. Add it nullable.
+Currency *string
+
+// 2. Backfill, outside a migration, in batches.
+// 3. Then make it NOT NULL.
+Currency string `orm:"default:'EUR'"`
+```
+
+`orm makemigrations --dry-run --sql` shows which of these PostgreSQL will do
+cheaply, before you find out on production.
+
+### Renaming without downtime
+
+The planner sees a dropped column and an added one, not a rename, and dropping a
+column deletes its data. Add, dual-write, backfill, drop — four deploys:
+
+```bash
+orm makemigrations --dry-run --sql   # read it before you believe it
+```
+
+### Checking a deploy is complete
+
+```bash
+orm showmigrations         # what is applied, what is pending
+orm migrate --plan         # exactly what the next run would do
+orm check --generated      # committed code matches the schema
+```
+
+### The CI gate
+
+```yaml
+- run: orm makemigrations --check   # a declaration nobody planned
+- run: orm check --generated        # a plan nobody regenerated for
+```
+
+The first fails when somebody changed a struct and forgot. The second fails when
+somebody planned and forgot to regenerate. Between them the three
+representations cannot drift apart.

@@ -134,3 +134,70 @@ db.Users.Query().Where(orm.Expr[User]("age(created_at) > interval ?", "1 year"))
 ```
 
 `Expr` принимает текст SQL намеренно. Значения, вставленные в него, — нет: каждый `?` становится параметром привязки, а плейсхолдеры фрагмента проверяются против переданных аргументов.
+
+## Разобранные примеры
+
+### Доска вакансий
+
+Три фильтра, читающиеся как три предложения, и один, которого в SQL нет, пока вы
+его не напишете.
+
+```go
+// Удалённые вакансии этого месяца с зарплатой не ниже порога.
+db.Postings.Query().Where(
+    Postings.Remote.Eq(true),
+    Postings.PostedAt.Gte(monthStart),
+    Postings.SalaryMin.Gte(60000),
+)
+
+// Всё, кроме заблокированных агентств.
+db.Postings.Query().Where(orm.Not(Postings.CompanyID.In(blocked...)))
+
+// Заголовок или описание — один OR, написанный один раз.
+db.Postings.Query().Where(orm.Or(
+    Postings.Title.ILike("%golang%"),
+    Postings.Description.ILike("%golang%"),
+))
+```
+
+### Очередь модерации
+
+Случаи с NULL — там живёт большинство ошибок в фильтрах:
+
+```go
+// Ни разу не просмотрено: reviewed_at никогда не проставляли.
+db.Comments.Query().Where(Comments.ReviewedAt.IsNull())
+
+// Просмотрено и одобрено: проставлено, причина не записана.
+db.Comments.Query().Where(
+    Comments.ReviewedAt.IsNotNull(),
+    Comments.RejectReason.IsNull(),
+)
+
+// Просмотрено и отклонено с причиной, которая не пустая строка.
+db.Comments.Query().Where(
+    Comments.RejectReason.IsNotNull(),
+    orm.Not(Comments.RejectReason.Eq("")),
+)
+```
+
+У `NOT NULL` колонки нет `IsNull`, поэтому первые два по ошибке к ней не
+применить.
+
+### Прайс-лист
+
+Сравнение двух колонок — это составной запрос, а не запрос по сущности:
+
+```go
+// Всё, что сейчас продаётся ниже себестоимости.
+orm.Compose(pool, shape).
+    From(Prices.Source()).
+    Where(orm.Lt(Prices.Retail, Prices.Cost)).
+    All(ctx)
+
+// Маржа ниже порога, вычисленная, а не хранимая.
+orm.Compose(pool, shape).
+    From(Prices.Source()).
+    Where(orm.Lt(Prices.Retail.SubCol(Prices.Cost), orm.Val(int32(500)))).
+    All(ctx)
+```

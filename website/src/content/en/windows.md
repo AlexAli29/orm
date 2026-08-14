@@ -163,3 +163,64 @@ rows, err := orm.Compose(pool, shape).
 ```
 
 See [Hard queries](/en/docs/cookbook/insane/) for the whole of that one.
+
+## Worked examples
+
+### A leaderboard with ties handled
+
+```go
+w := orm.Window().OrderBy(orm.Of(Scores.Points).Desc())
+
+var board = orm.Project3(
+    orm.Of(Scores.Player),
+    orm.Rank().Over(w),        // 1, 2, 2, 4 — a tie leaves a hole
+    orm.DenseRank().Over(w),   // 1, 2, 2, 3 — a tie does not
+    func(p string, r, d int64) Row { return Row{p, r, d} },
+)
+
+orm.Compose(pool, board).From(Scores.Source()).All(ctx)
+```
+
+Which one is right depends on whether "third place" should exist when two people
+tie for second. That is a product decision, and the two functions let you make it.
+
+### Change since the previous reading
+
+```go
+w := orm.Window().
+    PartitionBy(orm.Of(Meters.MeterID)).
+    OrderBy(orm.Of(Meters.ReadAt).Asc())
+
+previous := orm.Lag(Meters.Value).Over(w)
+
+var deltas = orm.Project3(
+    orm.Of(Meters.MeterID), orm.Of(Meters.Value), previous,
+    func(id int64, now int32, before *int32) Delta { return Delta{id, now, before} },
+)
+```
+
+`before` is a pointer because the first reading of each meter has nothing behind
+it. Partitioning restarts that at every meter.
+
+### A running balance
+
+```go
+running := orm.SumInt32[orm.Composed, int64](orm.Of(Entries.AmountCents)).
+    Over(orm.Window().
+        PartitionBy(orm.Of(Entries.AccountID)).
+        OrderBy(orm.Of(Entries.PostedAt).Asc()).
+        Rows(orm.UnboundedPreceding(), orm.CurrentRow()))
+```
+
+### A seven-day moving average
+
+```go
+avg := orm.AvgInt64[orm.Composed, float64](orm.Of(Daily.Total)).
+    Over(orm.Window().
+        OrderBy(orm.Of(Daily.Day).Asc()).
+        Rows(orm.Preceding(6), orm.CurrentRow()))
+```
+
+`Rows(6 preceding, current)` is seven rows including this one. Using `Range`
+instead would group days with equal values together, which is not what a moving
+average means.

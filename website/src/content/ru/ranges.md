@@ -126,3 +126,71 @@ Schedules.Free.IsEmpty()
 канонической форме, поэтому `[1,10]` приходит как `[1,11)`. Мультидиапазоны
 канонизируются все. Это нормализация сервера, а не пакета, и вы читаете именно
 те значения, которые он держит.
+
+## Разобранные примеры
+
+### Переговорная
+
+Двойное бронирование — это один предикат, а не пара сравнений, которые надо не
+перепутать:
+
+```go
+wanted := orm.ClosedOpen(start, end)
+
+clash, err := db.Bookings.Query().
+    Where(Bookings.RoomID.Eq(roomID)).
+    Where(Bookings.During.Overlaps(wanted)).
+    Exists(ctx)
+```
+
+`ClosedOpen` — правильная форма для времени: бронь, кончающаяся в 10:00, и бронь,
+начинающаяся в 10:00, не пересекаются, и `[start, end)` говорит именно это.
+
+### Цена с окном действия
+
+Цена, действующая на дату, и строки, у которых конца ещё нет:
+
+```go
+current, err := db.Tariffs.Query().
+    Where(Tariffs.ProductID.Eq(id)).
+    Where(Tariffs.Valid.Contains(on)).
+    One(ctx)
+
+open, err := db.Tariffs.Query().
+    Where(Tariffs.Valid.Overlaps(orm.RangeFrom(time.Now()))).
+    All(ctx)
+```
+
+### График смен
+
+Где покрытие кончается, а следующая смена ещё не началась, — смежность и
+промежутки:
+
+```go
+// Смены, которые соприкасаются, но не пересекаются.
+db.Shifts.Query().Where(Shifts.Hours.Adjacent(other))
+
+// Всё, что целиком раньше границы.
+db.Shifts.Query().Where(Shifts.Hours.StrictlyLeftOf(orm.RangeFrom(cutoff)))
+
+// Границы, прочитанные в SQL.
+var span = orm.Project2(
+    Shifts.Hours.Lower(), Shifts.Hours.Upper(),
+    func(from, to *time.Time) Span { return Span{from, to} },
+)
+```
+
+Обе границы nullable, потому что у открытой смены там нет значения.
+
+### Доступность как мультидиапазон
+
+```go
+// Какое-то из свободных окон целиком покрывает приём.
+db.Calendars.Query().Where(Calendars.Free.ContainsRange(appointment))
+
+// Промежуток от первой свободной минуты до последней, вместе с дырами.
+var span = orm.Project1(
+    Calendars.Free.Merge(),
+    func(r orm.Range[time.Time]) orm.Range[time.Time] { return r },
+)
+```

@@ -150,3 +150,66 @@ db.Users.Query().Where(orm.Expr[User]("age(created_at) > interval ?", "1 year"))
 каждый `?` становится параметром привязки, а плейсхолдеры фрагмента считаются
 против переданных аргументов, поэтому несоответствие — это ошибка сборки, а не
 невнятная ошибка сервера.
+
+## Разобранные примеры
+
+### Тарифная категория посылки
+
+`CASE`, превращающий число в метку прямо в SQL, чтобы по ней можно было
+группировать:
+
+```go
+band := orm.Case(orm.Cond(Parcels.Grams.Lt(500)), orm.Val("letter")).
+    When(orm.Cond(Parcels.Grams.Lt(2000)), orm.Val("small")).
+    When(orm.Cond(Parcels.Grams.Lt(20000)), orm.Val("parcel")).
+    Else(orm.Val("freight"))
+
+var byBand = orm.Project2(
+    band, orm.Count[orm.Composed](),
+    func(b string, n int64) Band { return Band{b, n} },
+)
+
+orm.Compose(pool, byBand).From(Parcels.Source()).GroupBy(band).All(ctx)
+```
+
+Сделать это в Go значило бы вытащить все посылки, чтобы посчитать четыре числа.
+
+### Отображаемое имя, которое никогда не пустое
+
+```go
+name := orm.Coalesce(Members.Nickname, orm.Of(Members.Email))
+```
+
+`Nickname` nullable, `Email` — нет, поэтому результат не может быть NULL и его
+тип — `string`. Цепочка запасных значений это доказывает, а не подразумевает.
+
+### Пустое как отсутствующее
+
+```go
+// Пустая заметка — не заметка.
+note := orm.NullIf(orm.Of(Tickets.Note), orm.Val(""))
+```
+
+### Регистронезависимое сравнение, которое пользуется индексом
+
+```go
+// С индексом по lower(email) это им воспользуется; ILike — нет.
+orm.Compose(pool, shape).From(Members.Source()).
+    Where(orm.Eq(orm.Lower(Members.Email), orm.Lower(orm.Val(input))))
+```
+
+### То, что есть в PostgreSQL и не обёрнуто пакетом
+
+```go
+// greatest(stock - reserved, 0)
+available := orm.Fn[Item, int32]("greatest",
+    orm.ArgOf(Items.Stock.SubCol(Items.Reserved)),
+    orm.ArgValue(int32(0)))
+
+// Функция, возвращающая boolean, в роли предиката.
+db.Items.Query().Where(orm.FnPredicate[Item]("pg_try_advisory_lock", orm.ArgOf(Items.ID)))
+```
+
+Параметр типа — ваше обещание о типе результата. По PostgreSQL оно не
+проверяется, и именно это делает такой вызов аварийным выходом, а не основной
+дорогой.

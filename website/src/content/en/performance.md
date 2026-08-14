@@ -72,3 +72,52 @@ The repository has benchmarks that are compiled and run in CI, so a regression i
 ```bash
 go test -run '^$' -bench . -benchtime 10x ./...
 ```
+
+## Worked examples
+
+### Reading a plan before trusting a query
+
+```go
+q := db.Orders.Query().
+    Where(Orders.CustomerID.Eq(id)).
+    OrderBy(Orders.PlacedAt.Desc()).
+    Limit(20)
+
+plan, err := q.Explain(ctx)
+fmt.Println(plan.TotalCost, plan.PlanRows)
+```
+
+`Explain` does not run the statement. `ExplainAnalyze` does, which is why they
+have different names — running one on a `DELETE` deletes.
+
+### Grouping slow queries by shape
+
+```go
+fp, err := q.Fingerprint()
+metrics.Observe(fp.String(), elapsed)
+```
+
+Two calls with different customer ids fingerprint the same; the same query with a
+different `LIMIT` does not, because a small limit is what makes the planner
+choose an index it would otherwise skip.
+
+### Checking a query's shape in a unit test
+
+```go
+report, err := q.Diagnostics()   // no database needed
+if report.Joins > 3 {
+    t.Errorf("this grew a join nobody meant to add")
+}
+```
+
+### Counting statements rather than guessing
+
+```go
+db := domain.New(orm.Traced(pool, counter))
+
+_, _ = db.Customers.Query().With(Customers.Orders).All(ctx)
+// counter saw 2 statements, whatever the row count
+```
+
+A tracer is the honest way to assert there is no N+1: the number is observed
+rather than reasoned about.

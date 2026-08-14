@@ -131,3 +131,67 @@ A branch is not a scope-sharing mechanism, and that is structural — each branc
 ## One statement
 
 A compound is one SQL statement. It is never two queries whose rows are appended in Go — that would lose the compound `ORDER BY`, lose `LIMIT`, and turn one round trip into two.
+
+## Worked examples
+
+### One activity feed from three tables
+
+Comments, likes and follows, interleaved by time. The projection is what makes
+them the same shape:
+
+```go
+type Item struct {
+    At   time.Time
+    Kind string
+    Text string
+}
+
+feed := func(at orm.Expression[time.Time, *time.Time], kind string,
+    text orm.Expression[string, *string]) orm.Projection[orm.Composed, Item] {
+    return orm.Project3(at, orm.Val(kind), text,
+        func(a time.Time, k, t string) Item { return Item{a, k, t} })
+}
+
+when := orm.Named("at", orm.Of(Comments.PostedAt))
+
+rows, err := orm.UnionAll[Item](
+    orm.Compose(pool, feed(orm.Of(Comments.PostedAt), "comment", orm.Of(Comments.Body))).
+        From(Comments.Source()),
+    orm.Compose(pool, feed(orm.Of(Likes.LikedAt), "like", orm.Of(Likes.Target))).
+        From(Likes.Source()),
+    orm.Compose(pool, feed(orm.Of(Follows.At), "follow", orm.Of(Follows.Handle))).
+        From(Follows.Source()),
+).OrderBy(when.Desc()).Limit(50).All(ctx)
+```
+
+Three tables, one statement, one `ORDER BY` over the whole result. Fetching each
+separately and merging in Go would need all three complete before it could take
+the newest fifty.
+
+### Live rows and archived rows
+
+The same shape from two tables that are the same table split by age:
+
+```go
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Orders.Source()).
+        Where(orm.Cond(Orders.PlacedAt.Gte(cutoff))),
+    orm.Compose(pool, shape).From(ArchivedOrders.Source()).
+        Where(orm.Cond(ArchivedOrders.PlacedAt.Lt(cutoff))),
+).All(ctx)
+```
+
+### Branch limits and a compound limit
+
+```go
+// The two newest of each, then the three newest overall.
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Inbox.Source()).
+        OrderBy(orm.Of(Inbox.At).Desc()).Limit(2),
+    orm.Compose(pool, shape).From(Archive.Source()).
+        OrderBy(orm.Of(Archive.At).Desc()).Limit(2),
+).OrderBy(when.Desc()).Limit(3).All(ctx)
+```
+
+Four rows are fetched and three are returned. The branch limits are parenthesised
+so they stay branch limits.

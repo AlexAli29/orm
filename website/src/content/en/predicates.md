@@ -134,3 +134,70 @@ db.Users.Query().Where(orm.Expr[User]("age(created_at) > interval ?", "1 year"))
 ```
 
 `Expr` takes SQL text deliberately. It does not take values formatted into it — every `?` becomes a bind parameter, and the fragment's placeholders are validated against the arguments given.
+
+## Worked examples
+
+### A job board
+
+Three filters that read as three sentences, and one that does not exist in SQL
+until you write it.
+
+```go
+// Remote roles, posted this month, paying at least the floor.
+db.Postings.Query().Where(
+    Postings.Remote.Eq(true),
+    Postings.PostedAt.Gte(monthStart),
+    Postings.SalaryMin.Gte(60000),
+)
+
+// Anything but the agencies we have blocked.
+db.Postings.Query().Where(orm.Not(Postings.CompanyID.In(blocked...)))
+
+// Title or description — one OR, written once.
+db.Postings.Query().Where(orm.Or(
+    Postings.Title.ILike("%golang%"),
+    Postings.Description.ILike("%golang%"),
+))
+```
+
+### A moderation queue
+
+The NULL cases, which are where most filter bugs live:
+
+```go
+// Never reviewed: reviewed_at was never set.
+db.Comments.Query().Where(Comments.ReviewedAt.IsNull())
+
+// Reviewed and cleared: set, and no reason recorded.
+db.Comments.Query().Where(
+    Comments.ReviewedAt.IsNotNull(),
+    Comments.RejectReason.IsNull(),
+)
+
+// Reviewed and rejected with a reason that is not the empty string.
+db.Comments.Query().Where(
+    Comments.RejectReason.IsNotNull(),
+    orm.Not(Comments.RejectReason.Eq("")),
+)
+```
+
+A `NOT NULL` column has no `IsNull`, so the first two cannot be written against
+one by mistake.
+
+### A price book
+
+Comparing two columns, which is a composed query rather than an entity one:
+
+```go
+// Anything currently sold below cost.
+orm.Compose(pool, shape).
+    From(Prices.Source()).
+    Where(orm.Lt(Prices.Retail, Prices.Cost)).
+    All(ctx)
+
+// Margin below a threshold, computed rather than stored.
+orm.Compose(pool, shape).
+    From(Prices.Source()).
+    Where(orm.Lt(Prices.Retail.SubCol(Prices.Cost), orm.Val(int32(500)))).
+    All(ctx)
+```

@@ -78,3 +78,82 @@ orm check
 ```
 
 With an empty project this reports that it found no declarations, which is the correct answer and proves the CLI can reach the database.
+
+## Worked examples
+
+### Database-first, against an existing database
+
+No `mode`, no migrations directory — the database is authoritative and you write
+declarations that describe it:
+
+```yaml
+version: 1
+
+schema:
+  dsn: ${DATABASE_URL}
+  search_path:
+    - public
+    - reporting
+
+packages:
+  - path: ./internal/domain
+    output: same
+```
+
+### Managed, with several bounded contexts
+
+Each context owns its own package, and the generator writes beside each:
+
+```yaml
+version: 1
+
+schema:
+  mode: managed
+  dsn: ${DATABASE_URL}
+  search_path:
+    - public
+    - billing
+    - identity
+
+migrations:
+  dir: migrations
+
+packages:
+  - path: ./internal/billing/domain
+    output: same
+  - path: ./internal/identity/domain
+    output: same
+  - path: ./internal/catalog/domain
+    output: same
+```
+
+Two contexts may own tables with the same name in different schemas; they produce
+separate descriptors and separate migration state.
+
+### Types Go does not have
+
+```yaml
+types:
+  uuid:
+    go: github.com/google/uuid.UUID
+    codec: uuid
+  numeric:
+    go: github.com/shopspring/decimal.Decimal
+    codec: decimal
+```
+
+These are the two the ORM refuses to choose for you, because the popular packages
+are not interchangeable and a wrong `numeric` silently corrupts money.
+
+### A Makefile that keeps everything in step
+
+```makefile
+generate:
+	go run github.com/AlexAli29/orm/cmd/orm makemigrations
+	go run github.com/AlexAli29/orm/cmd/orm migrate
+	go run github.com/AlexAli29/orm/cmd/orm generate
+
+check:
+	go run github.com/AlexAli29/orm/cmd/orm makemigrations --check
+	go run github.com/AlexAli29/orm/cmd/orm check --generated
+```

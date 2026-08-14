@@ -111,3 +111,71 @@ Declared on the type, because an index belongs to a relation rather than to a co
 ```
 
 Fields are named by their Go names; a quoted string is a SQL expression.
+
+## Worked examples
+
+### A multi-tenant table
+
+Everything a tenant column needs: the tag, the composite key and the index that
+makes lookups scoped rather than filtered.
+
+```go
+//orm:table public.documents
+//orm:index documents_tenant_idx (TenantID, UpdatedAt)
+//orm:index documents_slug_key (TenantID, Slug) unique
+type Document struct {
+    TenantID  int64     `orm:"pk"`
+    ID        int64     `orm:"pk,identity"`
+    Slug      string
+    Title     string
+    Body      *string
+    UpdatedAt time.Time `orm:"default:now()"`
+}
+```
+
+Two `pk` fields are a composite key. The unique index is on the pair, so two
+tenants may use the same slug and one tenant may not.
+
+### A table that names its columns differently
+
+```go
+//orm:table billing.invoice_lines
+type InvoiceLine struct {
+    ID        int64  `orm:"pk,identity"`
+    InvoiceID int64  `orm:"column:inv_id"`
+    Cents     int32  `orm:"column:amount_cents"`
+    Note      string `orm:"-"`   // not a column at all
+}
+```
+
+`column:` is for a schema you did not choose. `-` is for a field that is yours
+alone — a cached value, a formatting helper — and the generator will not look
+for it.
+
+### Generated and defaulted columns
+
+```go
+//orm:table public.people
+type Person struct {
+    ID       int64  `orm:"pk,identity:always"`
+    First    string
+    Last     string
+    Full     string    `orm:"generated:first || ' ' || last"`
+    JoinedAt time.Time `orm:"default:now()"`
+    Ref      uuid.UUID `orm:"pgtype:uuid,default:gen_random_uuid()"`
+}
+```
+
+`identity:always` means PostgreSQL refuses a value you supply, which is stronger
+than the default `identity`.
+
+### Indexes worth declaring
+
+```go
+//orm:index orders_open_idx (PlacedAt) where "shipped_at IS NULL"
+//orm:index orders_lower_ref_idx ("lower(reference)")
+//orm:index orders_tags_gin_idx (Tags) using gin
+```
+
+A partial index over open orders is smaller than one over all of them, and stays
+small as the table grows.

@@ -63,3 +63,35 @@ If reconciliation cannot prove a field, it does not generate a descriptor for it
 - [Installation](/en/docs/installation/) — add the module and the CLI.
 - [Quickstart](/en/docs/quickstart/) — a schema, a struct and a query in a few minutes.
 - [Core concepts](/en/docs/concepts/) — the vocabulary the rest of the docs uses.
+
+## Worked examples
+
+A taste of what the compiler is doing for you, in four unrelated schemas.
+
+```go
+// A shop. Text has Like; the compiler knows because the catalog said text.
+db.Products.Query().Where(Products.Name.ILike("%lamp%"))
+
+// A ledger. The balance check is in the WHERE, so an overdraft is an update
+// that matched nothing rather than a race.
+db.Accounts.Update(ctx).
+    SetExpr(Accounts.Balance, Accounts.Balance.Sub(amount)).
+    Where(Accounts.ID.Eq(id)).
+    Where(Accounts.Balance.Gte(amount)).
+    Exec(ctx)
+
+// A calendar. Overlap is one predicate, not four comparisons to get right.
+db.Bookings.Query().Where(Bookings.During.Overlaps(orm.ClosedOpen(from, to)))
+
+// A fleet. Three levels loaded in three statements, whatever the row count.
+db.Depots.Query().With(Depots.Vehicles.With(Vehicles.Services)).All(ctx)
+```
+
+And four things that do not compile, which is the same claim from the other side:
+
+```go
+Products.PriceCents.ILike("%")          // an integer has no ILike
+Products.Name.IsNull()                  // name is NOT NULL
+db.Accounts.Query().Where(Products.Name.Eq("x"))  // wrong entity
+orm.UnionAll[Row](byEmail, byAge)       // branches disagree on shape
+```

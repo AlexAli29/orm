@@ -107,3 +107,64 @@ db.Users.Update(ctx).
 
 `jsonb_path_ops` меньше и быстрее для одного лишь `@>`, но поддерживает меньше
 операторов — объявляйте его как индекс по выражению, если он нужен.
+
+## Разобранные примеры
+
+### Флаги функций у аккаунта
+
+```go
+settings := orm.Opt(Accounts.Settings)
+
+// Аккаунты, включившие бету.
+orm.Compose(pool, shape).From(Accounts.Source()).
+    Where(orm.JSONContains(settings, orm.Val(map[string]any{"beta": true})))
+
+// Аккаунты, где ключ вообще не задавали, — это другой вопрос.
+orm.Compose(pool, shape).From(Accounts.Source()).
+    Where(orm.Not(orm.JSONHasKey(settings, "beta")))
+```
+
+`Contains` спрашивает про значение, `HasKey` — принимал ли кто-то решение. Флаг,
+которого нет, и флаг, равный `false`, — разные состояния, и так их различают.
+
+### Полезная нагрузка события
+
+Чтение вложенного значения и сравнение его как числа:
+
+```go
+payload := orm.Opt(Events.Payload)
+
+amount := orm.CastNull(orm.JSONPathText(payload, "order", "total"), orm.Integer)
+
+var big = orm.Project2(
+    orm.Of(Events.ID), amount,
+    func(id int64, total *int32) Big { return Big{id, total} },
+)
+
+orm.Compose(pool, big).From(Events.Source()).
+    Where(orm.JSONPathExists(payload, "$.order.total")).
+    All(ctx)
+```
+
+Тип определяется приведением. `->>` возвращает текст, что бы ни лежало в
+документе, и сравнение с числом обязано это сказать.
+
+### Документ профиля, правка на месте
+
+```go
+db.Profiles.Update(ctx).
+    SetExpr(Profiles.Doc,
+        orm.JSONSet(Profiles.Doc, []string{"contact", "email"}, newEmail, true)).
+    Where(Profiles.ID.Eq(id)).
+    Exec(ctx)
+```
+
+`true` — это `create_missing`: добавить `contact.email`, если пути нет. С `false`
+обновление ничего не сделает с документом, где его никогда не было.
+
+### Вопросы о форме
+
+```go
+orm.JSONTypeOf(orm.Opt(Events.Payload))       // "object", "array", "string"…
+orm.JSONArrayLength(orm.Opt(Events.Items))    // *int32, NULL, если это не массив
+```

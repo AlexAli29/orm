@@ -107,3 +107,61 @@ if errors.Is(err, orm.ErrCalendarInterval) {
 ## Неподдержанные типы отвергаются
 
 Колонка, для типа которой нет отображения, останавливает генерацию с диагностикой: имя колонки, тип и способ починки. Она никогда не деградирует до `any`, `string` или `[]byte` — заглушка, которая «сканируется», хуже упавшей сборки, потому что ломается позже и дальше от причины.
+
+## Разобранные примеры
+
+### Деньги без float
+
+```go
+//orm:table public.invoices
+type Invoice struct {
+    ID    int64   `orm:"pk,identity"`
+    Cents int64                                  // простой ответ
+    Total decimal.Decimal `orm:"pgtype:numeric"` // точный
+}
+```
+
+Целые копейки годятся, пока не понадобится третий знак после запятой или ставка.
+`numeric` точен при любом масштабе, и его отображение требует записи
+`types.numeric` — библиотека не выберет пакет для десятичных за вас.
+
+### Адреса и сети
+
+```go
+//orm:table public.sessions
+type Session struct {
+    ID     int64        `orm:"pk,identity"`
+    Client netip.Addr   `orm:"pgtype:inet"`
+    Subnet netip.Prefix `orm:"pgtype:cidr"`
+    Device net.HardwareAddr `orm:"pgtype:macaddr"`
+}
+```
+
+Они упорядочиваются и индексируются как адреса, а не как текст, поэтому диапазон
+подсети — это диапазон, а не `LIKE`.
+
+### Массивы, которые что-то значат
+
+```go
+//orm:table public.articles
+type Article struct {
+    ID      int64      `orm:"pk,identity"`
+    Tags    []string                        // NOT NULL, может быть пустым
+    Authors *[]int64                        // nullable: списка нет вовсе
+}
+```
+
+Пустой массив и NULL-массив — разные значения, и библиотека их различает. Что
+именно вам нужно — решение о схеме, а указатель — способ его высказать.
+
+### Домен, чтобы правило несла сама схема
+
+```go
+// CREATE DOMAIN email AS citext CHECK (VALUE ~ '@');
+type Contact struct {
+    Address string `orm:"pgtype:public.email"`
+}
+```
+
+Сверка идёт от домена к `citext` и отображает его в `string`. Имя указывайте со
+схемой, иначе мигрированное и прочитанное имена не совпадут.
