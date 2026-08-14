@@ -39,7 +39,7 @@ db.Users.Query().Where(orm.Or(
 ### Anything but
 
 ```go
-db.Users.Query().Where(orm.Not(Users.ID.InSlice(banned)))
+db.Users.Query().Where(orm.Not(Users.ID.In(banned...)))
 ```
 
 ### NULL versus empty
@@ -186,7 +186,7 @@ err := db.Tx(ctx, func(tx *domain.DB) error {
         Where(Jobs.Status.Eq("pending")).
         OrderBy(Jobs.Created.Asc()).
         Limit(10).
-        Lock(orm.ForUpdate, orm.SkipLocked()).
+        Lock(orm.ForUpdateStrong, orm.SkipLocked()).
         All(ctx)
     if err != nil {
         return err
@@ -232,7 +232,7 @@ orm.Compose(pool, shape).From(Users.Source()).Where(
 ## Full text search
 
 ```go
-q := orm.PlainToTSQuery("english", input)
+q := orm.PlainToTSQuery(orm.English, input)
 
 type Hit struct {
     ID    int64
@@ -241,13 +241,13 @@ type Hit struct {
 }
 
 var hits = orm.Project3(
-    Docs.ID, Docs.Title, Docs.Search.Rank(q),
+    Docs.ID, Docs.Title, orm.TSRank(Docs.Search, q),
     func(id int64, title string, rank float32) Hit { return Hit{id, title, rank} },
 )
 
 orm.Select(db.Docs, hits).
-    Where(Docs.Search.Matches(q)).
-    OrderBy(Docs.Search.Rank(q).Desc()).
+    Where(orm.Matches(Docs.Search, q)).
+    OrderBy(orm.TSRank(Docs.Search, q).Desc()).
     Limit(20).
     All(ctx)
 ```
@@ -256,7 +256,7 @@ orm.Select(db.Docs, hits).
 
 ```go
 db.Bookings.Query().Where(Bookings.During.Overlaps(
-    orm.NewRange(orm.Inclusive(from), orm.Exclusive(to)),
+    orm.ClosedOpen(from, to),
 ))
 
 db.Events.Query().Where(Events.At.Between(dayStart, dayEnd))

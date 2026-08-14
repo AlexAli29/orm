@@ -81,7 +81,7 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    log.Printf("%d пользователей", len(users))
+    log.Printf("%d users", len(users))
 }
 ```
 

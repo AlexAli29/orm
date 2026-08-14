@@ -94,11 +94,15 @@ tracer := ormotel.New(otelTracer,
 ```go
 import "github.com/AlexAli29/orm/ormhealth"
 
-h := ormhealth.New(pool,
-    ormhealth.WithMigrationState(migrationsDir),
-)
+// Дешёвый ответ про живость: дотягивается ли пул до PostgreSQL.
+report := ormhealth.Quick(ctx, pool)
 
-http.Handle("/healthz", ormhealth.Handler(h))
+// Ответ про готовность: он же спрашивает, та ли это схема, которую описывают
+// декларации, и все ли миграции применены.
+report := ormhealth.Deep(ctx, pool,
+    ormhealth.WithMigrationState(migrationsDir),
+    ormhealth.WithSchemaCheck("orm.yaml"),
+)
 ```
 
 `WithMigrationState` ловит наполовину случившийся деплой: пул поднят, запросы работают, а схема на версию отстала. Liveness скажет «нормально»; эта проверка — нет.

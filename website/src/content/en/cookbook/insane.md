@@ -31,9 +31,9 @@ rows, err := orm.Compose(pool, shape).
 ## Running total
 
 ```go
-running := orm.Named("running", orm.SumOver(orm.Of(Orders.Total)).
+running := orm.Named("running", orm.SumInt64[orm.Composed, int64](orm.Of(Orders.Total)).Over(orm.Window().
     OrderBy(orm.Of(Orders.Placed).Asc()).
-    Rows(orm.UnboundedPreceding, orm.CurrentRow))
+    Rows(orm.UnboundedPreceding(), orm.CurrentRow())))
 ```
 
 ## Gaps and islands
@@ -127,7 +127,7 @@ recent := orm.Sub("recent", orm.Rows(
 
 orm.Compose(pool, shape).
     From(Users.Source()).
-    LeftJoinLateral(recent, orm.True())
+    LeftJoinLateral(recent)
 ```
 
 ## Pivot
@@ -137,8 +137,8 @@ Counts by status, as columns rather than rows:
 ```go
 var pivot = orm.Project3(
     Orders.UserID,
-    orm.CountFilter[Order](Orders.Status.Eq("paid")),
-    orm.CountFilter[Order](Orders.Status.Eq("refunded")),
+    orm.Count[Order]().Filter(Orders.Status.Eq("paid")),
+    orm.Count[Order]().Filter(Orders.Status.Eq("refunded")),
     func(id int64, paid, refunded int64) Pivot { return Pivot{id, paid, refunded} },
 )
 

@@ -71,7 +71,7 @@ type Place struct {
 ```go
 // Всё в пределах 5 км от точки, на сфероиде — в метрах, потому что geography
 // измеряет в метрах.
-here := postgis.GeographyPoint(37.6173, 55.7558)
+here := postgis.GeographyPoint(-0.1276, 51.5072)
 
 places, err := db.Places.Query().
     Where(postgis.OfGeog(Places.Spot).

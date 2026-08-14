@@ -9,20 +9,27 @@ description: Настоящий PostgreSQL, одноразовые базы и �
 
 Всё здесь сделано так, чтобы запускаться против настоящего PostgreSQL и чтобы это было дёшево.
 
-## Одноразовые базы
+## База на тестовый бинарник
+
+`ormtest` не создаёт базы. Он даёт то, что делает настоящую базу удобной:
+применение миграций, проверку, что схема — это та, которую описывает ваш
+конфиг, и запуск теста внутри транзакции, которая всегда откатывается.
 
 ```go
 import "github.com/AlexAli29/orm/ormtest"
 
-func TestUsers(t *testing.T) {
-    dsn := ormtest.Create(t, schemaSQL) // свежая база, удаляется при очистке
-    pool, _ := pgxpool.New(t.Context(), dsn)
-    db := domain.New(pool)
-    // ...
+func TestMain(m *testing.M) {
+    conn, _ := pgx.Connect(ctx, os.Getenv("TEST_DSN"))
+    ormtest.Migrate(t, conn, "migrations")   // применить закоммиченные артефакты
+    os.Exit(m.Run())
 }
 ```
 
-DSN берётся из `ORM_TEST_ADMIN_DSN`. Без него помощники падают, а не пропускают тест: набор, вся работа которого — запускаться против базы и который тихо не запускается, покажет зелёный на машине без PostgreSQL.
+`ormtest.CheckSchema(ctx, "orm.yaml")` — та проверка, которую стоит поставить в
+CI: она падает, когда база не соответствует схеме из деклараций, а иначе это
+всплывает как странно сломавшийся посторонний тест.
+
+`RequireSchemaClean` — та же проверка в виде жёсткого требования.
 
 ## Контейнеры
 
@@ -66,10 +73,9 @@ err := ormtest.TruncateWith(ctx, pool,
 
 ```go
 func TestSomething(t *testing.T) {
-    err := orm.RunTx(t.Context(), pool, func(ex orm.Executor) error {
+    ormtest.TxFunc(t, pool, func(ex orm.Executor) {
         db := domain.New(ex)
-        // ... тест ...
-        return errors.New("rollback") // никогда не коммитим
+        // ... тест ... транзакция откатывается при выходе
     })
 }
 ```

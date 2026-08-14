@@ -9,20 +9,27 @@ Do not mock the database. A mock of a SQL driver tests that you can write a mock
 
 Everything here is built to run against a real PostgreSQL and to make that cheap.
 
-## Disposable databases
+## A database per test binary
+
+`ormtest` does not create databases. It gives you the pieces that make a real
+one usable: applying migrations, checking the schema is the one your config
+describes, and running a test inside a transaction that is always rolled back.
 
 ```go
 import "github.com/AlexAli29/orm/ormtest"
 
-func TestUsers(t *testing.T) {
-    dsn := ormtest.Create(t, schemaSQL) // a fresh database, dropped on cleanup
-    pool, _ := pgxpool.New(t.Context(), dsn)
-    db := domain.New(pool)
-    // ...
+func TestMain(m *testing.M) {
+    conn, _ := pgx.Connect(ctx, os.Getenv("TEST_DSN"))
+    ormtest.Migrate(t, conn, "migrations")   // apply the committed artifacts
+    os.Exit(m.Run())
 }
 ```
 
-The DSN comes from `ORM_TEST_ADMIN_DSN`. Without it the helpers fail rather than skip, when the suite is one whose whole job is to run against a database — a suite that quietly runs nothing reports green on a machine with no PostgreSQL.
+`ormtest.CheckSchema(ctx, "orm.yaml")` is the assertion worth putting in CI: it
+fails when the database is not the schema the declarations describe, which is the
+failure that otherwise shows up as an unrelated test breaking oddly.
+
+`RequireSchemaClean` is the same check as a hard requirement.
 
 ## Containers
 
@@ -65,10 +72,9 @@ Fast, and isolated without dropping anything:
 
 ```go
 func TestSomething(t *testing.T) {
-    err := orm.RunTx(t.Context(), pool, func(ex orm.Executor) error {
+    ormtest.TxFunc(t, pool, func(ex orm.Executor) {
         db := domain.New(ex)
-        // ... test ...
-        return errors.New("rollback") // never commit
+        // ... test ... the transaction is rolled back when it returns
     })
 }
 ```

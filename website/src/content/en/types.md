@@ -87,7 +87,7 @@ TenantID uuid.UUID `orm:"pgtype:tenant_uuid"`        // reports permanent drift
 A pair of endpoints cannot say whether a bound is inclusive, exclusive or unbounded, so `Range[T]` carries the whole model. Which of `daterange`, `tsrange` and `tstzrange` a `Range[time.Time]` column is comes from the catalog rather than being guessed from Go.
 
 ```go
-r := orm.NewRange(orm.Inclusive(start), orm.Exclusive(end))
+r := orm.ClosedOpen(start, end)
 db.Bookings.Query().Where(Bookings.During.Overlaps(r))
 ```
 

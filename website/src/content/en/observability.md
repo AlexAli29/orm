@@ -94,11 +94,15 @@ tracer := ormotel.New(otelTracer,
 ```go
 import "github.com/AlexAli29/orm/ormhealth"
 
-h := ormhealth.New(pool,
-    ormhealth.WithMigrationState(migrationsDir),
-)
+// A cheap liveness answer: can the pool reach PostgreSQL.
+report := ormhealth.Quick(ctx, pool)
 
-http.Handle("/healthz", ormhealth.Handler(h))
+// The readiness one, which also asks whether the schema is the one the
+// declarations describe and whether every migration is applied.
+report := ormhealth.Deep(ctx, pool,
+    ormhealth.WithMigrationState(migrationsDir),
+    ormhealth.WithSchemaCheck("orm.yaml"),
+)
 ```
 
 `WithMigrationState` is the one that catches the deploy that half-happened: the pool is up, the queries work, and the schema is a version behind. Liveness says fine; this says otherwise.

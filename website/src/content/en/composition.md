@@ -101,7 +101,7 @@ This is the one place a `UNION` appears inside the ORM, because PostgreSQL's gra
 ```go
 orm.Exists[User](sub)        // EXISTS (...)
 orm.NotExists[User](sub)
-Users.ID.InSub(sub)          // id IN (SELECT ...)
+orm.InSub(Users.ID, sub)          // id IN (SELECT ...)
 orm.Scalar[User, int64](sub) // a scalar subquery — always nullable
 ```
 

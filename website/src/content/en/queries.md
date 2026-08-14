@@ -109,7 +109,7 @@ A relation needing a statement of its own would have to see every row before it 
 
 ```go
 db.Users.Query().Where(Users.ID.Eq(id)).ForUpdate()
-db.Users.Query().Lock(orm.ForUpdate, orm.SkipLocked())
+db.Users.Query().Lock(orm.ForUpdateStrong, orm.SkipLocked())
 db.Users.Query().Lock(orm.ForShare, orm.NoWait())
 ```
 

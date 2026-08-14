@@ -109,7 +109,7 @@ for user, err := range db.Users.Query().Rows(ctx) {
 
 ```go
 db.Users.Query().Where(Users.ID.Eq(id)).ForUpdate()
-db.Users.Query().Lock(orm.ForUpdate, orm.SkipLocked())
+db.Users.Query().Lock(orm.ForUpdateStrong, orm.SkipLocked())
 db.Users.Query().Lock(orm.ForShare, orm.NoWait())
 ```
 

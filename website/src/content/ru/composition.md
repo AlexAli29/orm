@@ -101,7 +101,7 @@ tree := orm.RecursiveCTE("tree",
 ```go
 orm.Exists[User](sub)        // EXISTS (...)
 orm.NotExists[User](sub)
-Users.ID.InSub(sub)          // id IN (SELECT ...)
+orm.InSub(Users.ID, sub)          // id IN (SELECT ...)
 orm.Scalar[User, int64](sub) // скалярный подзапрос — всегда nullable
 ```
 

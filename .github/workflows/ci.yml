@@ -414,6 +414,12 @@ jobs:
           go-version: '1.25'
           cache: true
 
+      # The documentation's Go snippets name symbols, and symbols can stop
+      # existing. Nothing builds documentation, so nothing noticed until a
+      # reader tried to compile a page. This needs no database and runs here.
+      - name: the documentation names only symbols that exist
+        run: go test -count=1 ./internal/tools/doccheck
+
       - name: the compatibility matrix, with every supported major reachable
         run: go test -count=1 ./cmd/orm -run 'TestCompat_|TestMutationFixturePrecondition'
 

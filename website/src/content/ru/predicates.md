@@ -13,7 +13,7 @@ description: Какие сравнения даёт каждый тип коло
 Users.Email.Eq("a@example.com")
 Users.Email.Ne("a@example.com")
 Users.Email.In("a@example.com", "b@example.com")
-Users.ID.InSlice(ids)          // для готового среза
+Users.ID.In(ids...)          // для готового среза
 ```
 
 `NotIn` намеренно нет. `orm.Not(Users.ID.In(...))` говорит то же самое и говорит один раз.
@@ -39,10 +39,10 @@ Users.CreatedAt.Desc()
 ```go
 Users.Email.Like("%@example.com")
 Users.Email.ILike("%@EXAMPLE.com")
-Users.Email.NotLike("%@spam.test")
-Users.Email.HasPrefix("admin")
-Users.Email.HasSuffix(".org")
-Users.Email.Contains("example")
+orm.Not(Users.Email.Like("%@spam.test"))
+Users.Email.Like("admin%")
+Users.Email.Like("%.org")
+Users.Email.Like("%example%")
 ```
 
 ### Nullable-колонки
@@ -81,7 +81,7 @@ orm.JSONPathText(orm.Opt(Users.Meta), "billing", "tier")
 
 ```go
 Bookings.During.Overlaps(r)
-Bookings.During.ContainsElement(t)
+Bookings.During.Contains(t)
 Bookings.During.StrictlyLeftOf(other)
 Bookings.During.Adjacent(other)
 ```
@@ -89,8 +89,8 @@ Bookings.During.Adjacent(other)
 ### Полнотекстовый поиск
 
 ```go
-Docs.Search.Matches(orm.PlainToTSQuery("russian", "postgres маппер"))
-Docs.Search.Rank(query).Desc()
+orm.Matches(Docs.Search, orm.PlainToTSQuery(orm.English, "postgres mapper"))
+orm.TSRank(Docs.Search, query).Desc()
 ```
 
 ## Комбинирование

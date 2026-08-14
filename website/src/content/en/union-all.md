@@ -122,10 +122,6 @@ Restarting numbering in the second branch would produce SQL PostgreSQL accepts a
 
 A branch sees the compound's `WITH` items and its own sources. It does not see the other branch's:
 
-```go
-// refused: the right branch names a source only the left introduces
-```
-
 A branch is not a scope-sharing mechanism, and that is structural — each branch pushes its own scope frame.
 
 ## Nesting

@@ -87,7 +87,7 @@ TenantID uuid.UUID `orm:"pgtype:tenant_uuid"`        // постоянный л�
 Пара концов не скажет, включена граница, исключена или бесконечна, поэтому `Range[T]` несёт всю модель. Какой именно из `daterange`, `tsrange` и `tstzrange` перед вами, берётся из каталога, а не угадывается по Go-типу.
 
 ```go
-r := orm.NewRange(orm.Inclusive(start), orm.Exclusive(end))
+r := orm.ClosedOpen(start, end)
 db.Bookings.Query().Where(Bookings.During.Overlaps(r))
 ```
 
