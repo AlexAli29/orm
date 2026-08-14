@@ -505,11 +505,31 @@ h4:hover .heading-anchor,
 .code-copy.copied::after {
   content: attr(data-label);
   position: absolute;
-  right: calc(100% + 0.4rem);
+  right: calc(100% + 0.45rem);
+  /* Centred on the button rather than aligned to its top: with no top set, the
+     text sat against the content box and read as if it belonged to the row
+     above. */
+  top: 50%;
+  transform: translateY(-50%);
   white-space: nowrap;
   font-size: 0.7rem;
   font-family: var(--font-sans);
+  font-weight: 600;
   color: var(--accent);
+}
+
+/*
+  The chip and the confirmation share one strip.
+  
+  Both are pinned to the top-right, and the confirmation grows leftwards into
+  exactly where the chip sits — "Скопировано" is wide enough to reach it, and in
+  English "Copied" over "yaml" collides too. Rather than guessing a gap that
+  holds for every language and every label, the chip steps aside while the
+  confirmation is up: at that moment the reader is being told the copy worked,
+  not what language the block is.
+*/
+.code-block:has(.code-copy.copied) .code-lang {
+  opacity: 0;
 }
 
 /* On a touch screen there is no hover, so the affordances are always there. */
