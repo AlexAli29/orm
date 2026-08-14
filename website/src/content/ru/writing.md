@@ -110,32 +110,130 @@ db.Users.Insert(ctx, user, orm.OnConflict(Users.Email).DoUpdateSet(
 orm.OnConflict(Users.Email).Where(Users.Active.Eq(true)).DoNothing()
 ```
 
-## RETURNING в update и delete
+## RETURNING
 
-Вставка возвращает строки сама. Обновление и удаление — нет, поэтому просите:
+PostgreSQL умеет возвращать строки, которых коснулась запись. Библиотека
+использует это тремя способами, и разницу стоит знать: два из них происходят
+сами, а третий — нет.
+
+### Вставка возвращает всегда
+
+```go
+user, err := db.Users.Insert(ctx, User{Email: "a@example.com"})
+// user.ID заполнен; как и CreatedAt, и всё, что заполнила база
+```
+
+Поэтому `Insert` возвращает `(E, error)`, а не одну ошибку. Ключ identity,
+`DEFAULT now()`, генерируемая колонка и правки триггера — всё приходит в
+возвращённом значении, поэтому назад вы получаете строку в том виде, в каком она
+существует, а не ту структуру, которую отправили.
+
+`InsertMany` делает то же для среза, по порядку:
+
+```go
+users, err := db.Users.InsertMany(ctx, []User{a, b, c})
+// users[1].ID — ключ b
+```
+
+Список колонок всегда явный. `RETURNING *` определял бы порядок сканирования на
+сервере, где сгенерированный сканер его не видит.
+
+### Upsert возвращает выжившую строку
+
+```go
+user, err := db.Users.Insert(ctx, incoming,
+    orm.OnConflict(Users.Email).DoUpdate(Users.Name, Users.Seen))
+```
+
+Вставила она или обновила — назад приходит строка, которая теперь лежит в
+таблице. Это обычная причина брать `DoUpdate`, а не `DoNothing`: при конфликте
+`DoNothing` не возвращает **ни одной** строки, поэтому вы получаете нулевую
+сущность и по ней не отличите «уже была» от «только что записана».
+
+### Обновление и удаление — только если попросить
+
+`Exec` возвращает счётчик:
+
+```go
+n, err := db.Users.Update(ctx).
+    Set(Users.Active, false).
+    Where(Users.CreatedAt.Lt(cutoff)).
+    Exec(ctx)
+// n — сколько строк изменилось
+```
+
+Счётчик отвечает на «сколько». Когда нужно «какие», оберните строитель:
 
 ```go
 updated, err := orm.UpdateReturningEntity(
-    db.Users.Update(ctx).Set(Users.Active, false).Where(Users.ID.Eq(id)),
+    db.Users.Update(ctx).Set(Users.Active, false).Where(Users.CreatedAt.Lt(cutoff)),
 ).All(ctx)
-// []User — строки в том виде, в каком они после обновления
+// []User — каждая совпавшая строка в том виде, в каком она после обновления
+```
 
+```go
 deleted, err := orm.DeleteReturningEntity(
     db.Users.Delete(ctx).Where(Users.ID.Eq(id)),
 ).One(ctx)
+// строка в том виде, в каком она была прямо перед тем, как перестать существовать
 ```
 
-Или вернуть проекцию вместо целой сущности:
+Обратите внимание на время. Обновление возвращает **новые** значения, удаление —
+строку, которой уже нет. И то и другое — единственный шанс: после оператора одну
+уже не запросить, а другая больше не хранит старых значений.
+
+### Вернуть форму, а не сущность
+
+Когда нужны только две колонки изменившегося:
 
 ```go
+type Changed struct {
+    ID    int64
+    Email string
+}
+
+var changed = orm.Project2(
+    Users.ID, Users.Email,
+    func(id int64, email string) Changed { return Changed{id, email} },
+)
+
 rows, err := orm.UpdateReturning(
     db.Users.Update(ctx).Set(Users.Active, false).Where(cond),
-    Summaries,
+    changed,
 ).All(ctx)
+// []Changed
 ```
 
-Так вы узнаёте, что на самом деле сделала условная запись: счётчик строк говорит
-сколько, а `RETURNING` — какие именно.
+`DeleteReturning` принимает проекцию так же.
+
+### Терминалы
+
+У `Returning` их три и больше никаких:
+
+| Метод | Для чего |
+| --- | --- |
+| `All(ctx)` | все строки, которых коснулась запись |
+| `One(ctx)` | ровно одна или `ErrNotFound`; больше одной — ошибка |
+| `SQL()` | оператор и аргументы, без выполнения |
+
+`Exec` у `Returning` нет: оператор, у которого вы запросили строки и тут же их
+выбросили, — это оператор, которому с самого начала был нужен `Exec`.
+
+### Это по-прежнему запись
+
+`ErrMissingWhere` действует ровно так же, как и без `RETURNING`: обёртка не
+делает безусловное обновление безопасным:
+
+```go
+_, err := orm.UpdateReturningEntity(
+    db.Users.Update(ctx).Set(Users.Active, false),
+).All(ctx)
+// errors.Is(err, orm.ErrMissingWhere)
+```
+
+И это один оператор. Строки приходят из самой записи, а не из `SELECT` после
+неё, — именно поэтому это те строки, которых коснулась запись, даже при
+конкурентном доступе, а не те, что подходят сейчас.
 
 ## COPY
 
@@ -166,8 +264,3 @@ n, err := orm.CopyColumns(ctx, db.Events, events, Events.ID, Events.Kind)
 
 Упавший `COPY` падает как один оператор — не применяется ничего. Если он должен быть успешным вместе с другой работой, оберните в транзакцию.
 
-## Возврат проекции
-
-```go
-rows, err := db.Users.Insert(ctx, user, orm.Returning(Summaries))
-```

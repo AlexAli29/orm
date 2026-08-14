@@ -47,6 +47,10 @@ var packages = map[string]string{
 // It reads the source rather than a manifest so that a package without one is
 // still checkable, and so that the answer cannot lag behind the code the way a
 // generated file can.
+// genericTypes records the exported types that take type parameters, which is
+// what makes them impossible to call like a function without them.
+var genericTypes = map[string]bool{}
+
 func exportedOf(t *testing.T, dir string) map[string]bool {
 	t.Helper()
 	out := map[string]bool{}
@@ -71,6 +75,9 @@ func exportedOf(t *testing.T, dir string) map[string]bool {
 						case *ast.TypeSpec:
 							if s.Name.IsExported() {
 								out[s.Name.Name] = true
+								if s.TypeParams != nil {
+									genericTypes[s.Name.Name] = true
+								}
 							}
 						case *ast.ValueSpec:
 							for _, n := range s.Names {
@@ -339,4 +346,52 @@ func stripComments(s string) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// A generic type is not a constructor.
+//
+// The symbol check passes orm.Returning(...) because Returning exists — as a
+// type. Written as a call it cannot compile: a generic type needs its type
+// arguments, and there is no function of that name to fall back on. That is
+// exactly how orm.Returning(Summaries) survived a check designed to catch
+// invented API.
+func TestDocs_genericTypesAreNotCalled(t *testing.T) {
+	for qual, dir := range packages {
+		_ = exportedOf(t, dir) // populates genericTypes
+		_ = qual
+	}
+	funcs := map[string]bool{}
+	for _, dir := range packages {
+		fset := token.NewFileSet()
+		pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool {
+			return !strings.HasSuffix(fi.Name(), "_test.go")
+		}, 0)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", dir, err)
+		}
+		for _, pkg := range pkgs {
+			for _, file := range pkg.Files {
+				for _, decl := range file.Decls {
+					if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.IsExported() {
+						funcs[fn.Name.Name] = true
+					}
+				}
+			}
+		}
+	}
+
+	// pkg.Symbol( — a call, rather than a mention.
+	called := regexp.MustCompile(`\b(orm|postgis|ormtest|ormslog|observe|ormhealth|ormotel)\.([A-Z]\w*)\(`)
+	seen := map[string]bool{}
+	for _, s := range goSnippets(t) {
+		for _, m := range called.FindAllStringSubmatch(s.body, -1) {
+			sym := m[2]
+			if funcs[sym] || !genericTypes[sym] || seen[sym] {
+				continue
+			}
+			seen[sym] = true
+			t.Errorf("%s calls %s.%s, which is a generic type and not a function",
+				s.file, m[1], sym)
+		}
+	}
 }
