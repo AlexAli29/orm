@@ -64,7 +64,7 @@ rows, err := orm.Select(db.Users, Summaries).All(ctx)
 
 **The parameter types are not your choice.** `Users.ID` is a `bigint`, so the first parameter must be `int64`. `Users.Email` is `text`, so the second must be `string`. Write `func(id string, ...)` and it does not compile — the mismatch is caught where you wrote it, not when a row arrives.
 
-That is why the number is in the name: `Project1` for one expression, `Project2` for two, up to `Project8`.
+That is why the number is in the name: `Project1` for one expression, `Project2` for two, and so on up to `Project50`.
 
 ## Anything that produces a value
 
@@ -176,13 +176,37 @@ total  := orm.Named("total", orm.Count[orm.Composed]())
 
 The name is required rather than derived. `count(*)` has none, and inventing one from the rendered expression would make a derived table's column depend on how the compiler happened to spell it. See [Composition](/en/docs/composition/).
 
-## Why there are eight constructors
+## How wide a projection can be
+
+`Project50`. Fifty expressions, fifty parameters, one row type.
+
+That is far more than a projection usually wants, and the wide end exists so
+that the ORM is never the reason a query cannot be written — not because a
+fifty-parameter function literal is good style. A reporting row with sixteen
+columns is an ordinary thing and used to have no answer here; a fifty-column one
+is a signal that an entity query, or a projection into a struct built from
+several smaller ones, is the clearer shape.
+
+Two practical notes about the wide ones:
+
+- **The parameters are positional and untyped by name.** At four columns a
+  mismatch is obvious; at thirty, two adjacent `string` parameters swapped
+  compile fine and are wrong. Where several neighbouring columns share a type,
+  name the function's parameters after the columns and construct the result with
+  field names rather than positionally.
+- **Ordering is the only thing binding them.** The Nth expression feeds the Nth
+  parameter. Inserting a column in the middle of the constructor shifts every
+  parameter after it, and the compiler only notices if the types stop lining up.
+
+## Why the arity is in the name
 
 This is the one part that is about Go rather than about SQL, and it is here for the curious rather than because you need it.
 
 Go cannot express "a list of expressions whose result types are all different and all remembered". A variadic parameter has one type, and a type-parameter pack does not exist. Libraries that pretend otherwise do it with `[]any` and runtime assertions, which moves the mistake from the compiler to the customer.
 
-Writing the arity out — `Project1` through `Project8` — is what buys the checking above, and it is also what makes the row hot path do no reflection, hold no map and assert nothing. Scanning is N typed locals, one `Scan`, and one call.
+Writing the arity out is what buys the checking above, and it is also what makes the row hot path do no reflection, hold no map and assert nothing. Scanning is N typed locals, one `Scan`, and one call — at fifty columns exactly as much as at two.
+
+`Project1` through `Project8` are written by hand. The rest are generated from the same twelve lines, and a test reads the generated file back to confirm that every arity's expressions, destinations and call arguments are in the same order — because a transposition in generated code compiles, scans without error, and quietly reports the wrong number.
 
 ## Worked examples
 
@@ -234,6 +258,81 @@ offline, err := orm.Select(db.Devices, serials).
     All(ctx)
 // []string
 ```
+
+### A wide export row
+
+The case the eight-column limit used to block: a nightly export whose columns are
+dictated by whoever receives the file, not by what would be tidy.
+
+```go
+type Shipment struct {
+    Reference   string
+    Carrier     string
+    Service     string
+    Origin      string
+    Destination string
+    Weight      int32
+    Pieces      int32
+    Declared    *int64
+    Booked      time.Time
+    Collected   *time.Time
+    Delivered   *time.Time
+    Status      string
+}
+
+var shipmentExport = orm.Project12(
+    Shipments.Reference,
+    Shipments.Carrier,
+    Shipments.Service,
+    Shipments.Origin,
+    Shipments.Destination,
+    Shipments.WeightGrams,
+    Shipments.Pieces,
+    Shipments.DeclaredValue,
+    Shipments.BookedAt,
+    Shipments.CollectedAt,
+    Shipments.DeliveredAt,
+    Shipments.Status,
+    func(
+        reference, carrier, service, origin, destination string,
+        weight, pieces int32,
+        declared *int64,
+        booked time.Time,
+        collected, delivered *time.Time,
+        status string,
+    ) Shipment {
+        return Shipment{
+            Reference:   reference,
+            Carrier:     carrier,
+            Service:     service,
+            Origin:      origin,
+            Destination: destination,
+            Weight:      weight,
+            Pieces:      pieces,
+            Declared:    declared,
+            Booked:      booked,
+            Collected:   collected,
+            Delivered:   delivered,
+            Status:      status,
+        }
+    },
+)
+
+rows, err := orm.Select(db.Shipments, shipmentExport).
+    Where(Shipments.BookedAt.Gte(since)).
+    OrderBy(Shipments.BookedAt.Asc()).
+    All(ctx)
+```
+
+Two habits make a projection this wide safe to change. The parameters are named
+after their columns rather than `a, b, c`, so a reader can check the order
+against the constructor above without counting. And the struct is built with
+field names, so a swapped pair of `string` parameters — which the compiler
+cannot see — is at least visible in the diff.
+
+The three pointers are not decoration. `CollectedAt` and `DeliveredAt` are NULL
+for a shipment still in transit, and `DeclaredValue` is NULL when the customer
+did not declare one, which is a different fact from declaring zero.
 
 ### A seating chart
 

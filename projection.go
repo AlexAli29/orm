@@ -23,6 +23,16 @@ import (
 // What that costs is a family of near-identical constructors. What it buys is
 // that the row hot path does no reflection, holds no map, and asserts nothing:
 // scanning is N typed locals, one Scan, and one call.
+//
+// Project1 through Project8 are written out below. Project9 through Project50
+// are the same twelve lines at a different arity and live in projection_gen.go,
+// because a family that large is worth generating and not worth reading. The
+// boundary is where it is for one reason: the hand-written constructors name
+// their type parameters A, B, C, D, F, G, H, I — skipping E, which is the
+// entity — and those names are in the frozen v1 manifest. The generated ones
+// name theirs T1..TN, which is the only scheme that reaches fifty.
+//
+//go:generate go run ./internal/tools/genprojection -out projection_gen.go
 
 // Projection is a typed result shape: what to select, and how to read it back.
 //
