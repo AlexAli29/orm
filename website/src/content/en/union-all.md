@@ -9,6 +9,70 @@ v1 composes `UNION ALL` and nothing else. `UNION`, `INTERSECT` and `EXCEPT` are 
 
 `UNION ALL` keeps duplicate rows. That is the operation: if you wanted them removed you wanted a different one.
 
+## Writing one
+
+A branch is any typed query: an entity `Query`, a `SelectQuery`, a
+`ComposedQuery`, or another `UnionQuery`. Every branch produces the same Go
+result type, and the type argument is written out because Go cannot infer it
+from an interface a branch happens to satisfy.
+
+```go
+type Row struct {
+    ID    int64
+    Label string
+}
+
+// One shape, used by both branches. The names matter: a compound is ordered by
+// output name, so declare them with As.
+shape := orm.Project2(
+    orm.Of(Users.ID).As("thing_id"),
+    orm.Of(Users.Email).As("label"),
+    func(id int64, label string) Row { return Row{ID: id, Label: label} },
+)
+
+fromUsers := orm.Compose(pool, shape).From(Users.Source())
+fromPosts := orm.Compose(pool, shape).From(Posts.Source())
+
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).All(ctx)
+```
+
+```sql
+SELECT "users"."id" AS "thing_id", "users"."email" AS "label" FROM "public"."users"
+UNION ALL
+SELECT "posts"."id" AS "thing_id", "posts"."title" AS "label" FROM "public"."posts"
+```
+
+`All`, `One`, `Rows` and `SQL` work as they do on any other query. When the
+branches were built without an executor, give the compound one with `Using`:
+
+```go
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).Using(pool).All(ctx)
+```
+
+## Ordering the result
+
+`OrderBy` on a compound takes an **output declaration**, not a column — because a
+compound's `ORDER BY` may name a column of the result and nothing else:
+
+```go
+label := orm.Named("label", orm.Of(Users.Email))
+
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).
+    OrderBy(label.Asc()).
+    Limit(20).
+    All(ctx)
+```
+
+Passing a column ordering instead does not compile:
+
+```go
+.OrderBy(Users.ID.Asc())          // does not compile
+.OrderBy(orm.Of(Users.ID).Asc())  // does not compile either
+```
+
+That is deliberate. Both would render a term PostgreSQL refuses outright, and
+`OutputOrder` exists to make them unwritable rather than to catch them later.
+
 ## The rules
 
 Branches must have **exactly** compatible output shapes — same column count, same order, same Go result types, same nullability. The v1 contract is deliberately stricter than PostgreSQL's implicit coercion:

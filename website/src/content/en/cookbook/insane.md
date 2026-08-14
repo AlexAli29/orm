@@ -154,11 +154,13 @@ A table, a view and a materialized view in one result — legal because the proj
 ```go
 shape := orm.Project2(/* uuid, text */)
 
-rows, err := orm.UnionAll(
-    orm.SelectFrom(db.Users, Users.Source(), shape),
-    orm.SelectFrom(db.ActiveUsers, ActiveUsers.Source(), shape),
-    orm.SelectFrom(db.UserSummaries, UserSummaries.Source(), shape),
-).OrderBy("email").Limit(50).All(ctx)
+email := orm.Named("email", orm.Of(Users.Email))
+
+rows, err := orm.UnionAll[Row](
+    orm.Compose(pool, shape).From(Users.Source()),
+    orm.Compose(pool, shape).From(ActiveUsers.Source()),
+    orm.Compose(pool, shape).From(UserSummaries.Source()),
+).OrderBy(email.Asc()).Limit(50).All(ctx)
 ```
 
 No special handling by source kind. A read source is a read source.

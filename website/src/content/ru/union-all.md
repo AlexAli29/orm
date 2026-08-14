@@ -9,6 +9,72 @@ v1 составляет `UNION ALL` и ничего больше. `UNION`, `INTE
 
 `UNION ALL` сохраняет дубликаты. В этом и состоит операция: если их нужно было убрать, вам нужна была другая.
 
+## Как её написать
+
+Ветвь — это любой типизированный запрос: `Query` по сущности, `SelectQuery`,
+`ComposedQuery` или другой `UnionQuery`. Все ветви дают один и тот же Go-тип
+результата, а аргумент типа пишется явно: Go не выводит его из интерфейса,
+который ветвь случайно удовлетворяет.
+
+```go
+type Row struct {
+    ID    int64
+    Label string
+}
+
+// Одна форма на обе ветви. Имена важны: составной запрос сортируется по имени
+// колонки результата, поэтому объявляем их через As.
+shape := orm.Project2(
+    orm.Of(Users.ID).As("thing_id"),
+    orm.Of(Users.Email).As("label"),
+    func(id int64, label string) Row { return Row{ID: id, Label: label} },
+)
+
+fromUsers := orm.Compose(pool, shape).From(Users.Source())
+fromPosts := orm.Compose(pool, shape).From(Posts.Source())
+
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).All(ctx)
+```
+
+```sql
+SELECT "users"."id" AS "thing_id", "users"."email" AS "label" FROM "public"."users"
+UNION ALL
+SELECT "posts"."id" AS "thing_id", "posts"."title" AS "label" FROM "public"."posts"
+```
+
+`All`, `One`, `Rows` и `SQL` работают так же, как в любом другом запросе. Если
+ветви строились без исполнителя, дайте его составному запросу через `Using`:
+
+```go
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).Using(pool).All(ctx)
+```
+
+## Сортировка результата
+
+`OrderBy` у составного запроса принимает **объявление колонки результата**, а не
+колонку, — потому что `ORDER BY` составного запроса может называть только
+колонку результата:
+
+```go
+label := orm.Named("label", orm.Of(Users.Email))
+
+rows, err := orm.UnionAll[Row](fromUsers, fromPosts).
+    OrderBy(label.Asc()).
+    Limit(20).
+    All(ctx)
+```
+
+Сортировка по колонке не скомпилируется:
+
+```go
+.OrderBy(Users.ID.Asc())          // не компилируется
+.OrderBy(orm.Of(Users.ID).Asc())  // тоже не компилируется
+```
+
+Это намеренно. Оба варианта отрисовали бы терм, который PostgreSQL отвергает
+сразу, и `OutputOrder` существует, чтобы сделать их ненаписуемыми, а не чтобы
+поймать позже.
+
 ## Правила
 
 У ветвей должны быть **в точности** совместимые формы результата — то же число колонок, тот же порядок, те же Go-типы, та же nullability. Контракт v1 намеренно строже неявных приведений PostgreSQL:
