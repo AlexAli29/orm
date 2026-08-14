@@ -12,6 +12,7 @@ The whole of these docs in one file: https://ormgo.vercel.app/llms-full.txt
 - [Installation](https://ormgo.vercel.app/en/docs/installation.md): The module, the CLI and the configuration file.
 - [Quickstart](https://ormgo.vercel.app/en/docs/quickstart.md): From an empty directory to a typed query.
 - [Core concepts](https://ormgo.vercel.app/en/docs/concepts.md): The vocabulary the rest of the documentation uses.
+- [Docs for agents](https://ormgo.vercel.app/en/docs/agents.md): Plain-text documentation and a generated symbol list, for coding assistants.
 
 ## Schema
 

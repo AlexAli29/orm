@@ -12,6 +12,7 @@
 - [Установка](https://ormgo.vercel.app/ru/docs/installation.md): Модуль, CLI и файл конфигурации.
 - [Быстрый старт](https://ormgo.vercel.app/ru/docs/quickstart.md): От пустого каталога до типизированного запроса.
 - [Ключевые идеи](https://ormgo.vercel.app/ru/docs/concepts.md): Словарь, которым пользуется остальная документация.
+- [Документация для агентов](https://ormgo.vercel.app/ru/docs/agents.md): Документация в виде обычного текста и порождённый список символов — для кодовых ассистентов.
 
 ## Схема
 

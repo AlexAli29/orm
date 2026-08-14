@@ -33,6 +33,7 @@ export const nav: NavSection[] = [
       { slug: "installation", title: { en: "Installation", ru: "Установка" } },
       { slug: "quickstart", title: { en: "Quickstart", ru: "Быстрый старт" } },
       { slug: "concepts", title: { en: "Core concepts", ru: "Ключевые идеи" } },
+      { slug: "agents", title: { en: "Docs for agents", ru: "Документация для агентов" } },
     ],
   },
   {
