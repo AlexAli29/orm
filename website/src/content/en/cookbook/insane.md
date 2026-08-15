@@ -10,7 +10,7 @@ Each of these is one SQL statement with one parameter list. None of them is asse
 The classic. A window function inside a derived table, filtered outside it — because a window function cannot appear in a `WHERE`.
 
 ```go
-rank := orm.Named("rn", orm.RowNumber[orm.Composed]().
+rank := orm.Named("rn", orm.RowNumber().
     PartitionBy(orm.Of(Orders.UserID)).
     OrderBy(orm.Of(Orders.Placed).Desc()))
 
@@ -43,7 +43,7 @@ Consecutive runs of activity, found by the difference between a row number and t
 ```go
 grp := orm.Named("grp", orm.Sub(
     orm.Of(Events.Day),
-    orm.RowNumber[orm.Composed]().OrderBy(orm.Of(Events.Day).Asc()),
+    orm.RowNumber().OrderBy(orm.Of(Events.Day).Asc()),
 ))
 
 islands := orm.Sub("islands", orm.Rows(
@@ -152,7 +152,10 @@ orm.Select(db.Orders, pivot).GroupBy(Orders.UserID)
 A table, a view and a materialized view in one result — legal because the projections are identical:
 
 ```go
-shape := orm.Project2(/* uuid, text */)
+shape := orm.Project2(
+    orm.Of(Users.ID), orm.Of(Users.Email),
+    func(id uuid.UUID, email string) Row { return Row{id, email} },
+)
 
 email := orm.Named("email", orm.Of(Users.Email))
 

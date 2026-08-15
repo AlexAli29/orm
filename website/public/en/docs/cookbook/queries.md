@@ -367,7 +367,7 @@ type Daily struct {
     Average *float64
 }
 
-day := orm.DateTrunc("day", orm.Of(Orders.PlacedAt))
+day := orm.DateTrunc(orm.Day, Orders.PlacedAt)
 
 var daily = orm.Project5(
     orm.Named("day", day),
@@ -401,7 +401,7 @@ same answer written less clearly.
 ### Grouping by a derived value
 
 ```go
-month := orm.DateTrunc("month", orm.Of(Subscriptions.StartedAt))
+month := orm.DateTrunc(orm.Month, Subscriptions.StartedAt)
 
 orm.Select(db.Subscriptions, monthly).
     GroupBy(month).
@@ -438,7 +438,7 @@ var share = orm.Project2(
     orm.Named("pct", orm.Op(
         orm.Op(orm.SumInt32(Sales.Cents), "*", orm.Val(int64(100))),
         "/",
-        orm.Fn[Sale, int64]("sum", orm.Of(Sales.Cents)).Over(orm.Window[Sale]()),
+        orm.Fn[Sale, int64]("sum", orm.Of(Sales.Cents)).Over(orm.Window()),
     )),
     func(region string, pct *int64) Share { return Share{region, pct} },
 )
@@ -447,11 +447,11 @@ var share = orm.Project2(
 ### The busiest hour of each day
 
 ```go
-hour := orm.DateTrunc("hour", orm.Of(Rides.StartedAt))
-day := orm.DateTrunc("day", orm.Of(Rides.StartedAt))
+hour := orm.DateTrunc(orm.Hour, Rides.StartedAt)
+day := orm.DateTrunc(orm.Day, Rides.StartedAt)
 
-ranked := orm.RowNumber[Ride]().Over(
-    orm.Window[Ride]().PartitionBy(day).OrderBy(orm.Count[Ride]().Desc()),
+ranked := orm.RowNumber().Over(
+    orm.Window().PartitionBy(day).OrderBy(orm.Count[Ride]().Desc()),
 )
 ```
 
@@ -471,8 +471,8 @@ which row of each group survives. Here: the newest price per SKU.
 ### Numbering rows within a group
 
 ```go
-rank := orm.RowNumber[Result]().Over(
-    orm.Window[Result]().
+rank := orm.RowNumber().Over(
+    orm.Window().
         PartitionBy(orm.Of(Results.HeatID)).
         OrderBy(orm.Of(Results.TimeMillis).Asc()),
 )
@@ -481,17 +481,17 @@ rank := orm.RowNumber[Result]().Over(
 ### Rank, dense rank, and the difference
 
 ```go
-w := orm.Window[Score]().OrderBy(orm.Of(Scores.Points).Desc())
+w := orm.Window().OrderBy(orm.Of(Scores.Points).Desc())
 
-orm.Rank[Score]().Over(w)       // 1, 2, 2, 4  — gaps after ties
-orm.DenseRank[Score]().Over(w)  // 1, 2, 2, 3  — no gaps
-orm.RowNumber[Score]().Over(w)  // 1, 2, 3, 4  — arbitrary among ties
+orm.Rank().Over(w)       // 1, 2, 2, 4  — gaps after ties
+orm.DenseRank().Over(w)  // 1, 2, 2, 3  — no gaps
+orm.RowNumber().Over(w)  // 1, 2, 3, 4  — arbitrary among ties
 ```
 
 ### Running total
 
 ```go
-w := orm.Window[Entry]().
+w := orm.Window().
     OrderBy(orm.Of(Entries.At).Asc()).
     Rows(orm.UnboundedPreceding(), orm.CurrentRow())
 
@@ -502,7 +502,7 @@ running := orm.Fn[Entry, int64]("sum", orm.Of(Entries.Cents)).Over(w)
 
 ```go
 prev := orm.Lag(orm.Of(Readings.Celsius)).Over(
-    orm.Window[Reading]().
+    orm.Window().
         PartitionBy(orm.Of(Readings.SensorID)).
         OrderBy(orm.Of(Readings.At).Asc()),
 )
@@ -511,7 +511,7 @@ prev := orm.Lag(orm.Of(Readings.Celsius)).Over(
 ### A moving average
 
 ```go
-w := orm.Window[Tick]().
+w := orm.Window().
     OrderBy(orm.Of(Ticks.At).Asc()).
     Rows(orm.Preceding(6), orm.CurrentRow())
 
@@ -521,7 +521,7 @@ sevenDay := orm.Fn[Tick, float64]("avg", orm.Of(Ticks.Price)).Over(w)
 ### First and last in a partition
 
 ```go
-w := orm.Window[Event]().
+w := orm.Window().
     PartitionBy(orm.Of(Events.SessionID)).
     OrderBy(orm.Of(Events.At).Asc()).
     Rows(orm.UnboundedPreceding(), orm.UnboundedFollowing())
@@ -536,19 +536,19 @@ current row, which is the single most common window-function surprise.
 ### Quartiles
 
 ```go
-orm.Ntile[Customer](4).Over(
-    orm.Window[Customer]().OrderBy(orm.Of(Customers.LifetimeCents).Desc()),
+orm.Ntile(4).Over(
+    orm.Window().OrderBy(orm.Of(Customers.LifetimeCents).Desc()),
 )
 ```
 
 ### One window reused
 
 ```go
-w := orm.Window[Order]().
+w := orm.Window().
     PartitionBy(orm.Of(Orders.CustomerID)).
     OrderBy(orm.Of(Orders.PlacedAt).Asc())
 
-seq := orm.RowNumber[Order]().Over(w)
+seq := orm.RowNumber().Over(w)
 prevAt := orm.Lag(orm.Of(Orders.PlacedAt)).Over(w)
 firstAt := orm.FirstValue(orm.Of(Orders.PlacedAt)).Over(w)
 ```
@@ -1049,7 +1049,7 @@ first := orm.JSONIndexText(orm.Opt(Orders.Lines), 0)
 ```go
 db.Profiles.Update().
     Set(Profiles.Data.SetExpr(orm.JSONSet(
-        orm.Opt(Profiles.Data), orm.Val("verified"), orm.Val(true),
+        Profiles.Data, []string{"verified"}, orm.Val(true), true,
     ))).
     Where(Profiles.UserID.Eq(id)).
     Exec(ctx)
@@ -1160,21 +1160,21 @@ db.Events.Query().Where(Events.At.Between(dayStart, dayEnd))
 ### Truncating to a period
 
 ```go
-month := orm.DateTrunc("month", orm.Of(Invoices.IssuedAt))
+month := orm.DateTrunc(orm.Month, Invoices.IssuedAt)
 ```
 
 ### Pulling a field out
 
 ```go
-dow := orm.Extract("dow", orm.Of(Rides.StartedAt))
-year := orm.Extract("year", orm.Of(Rides.StartedAt))
+dow := orm.Extract(orm.DayOfWeek, Rides.StartedAt, orm.Integer)
+year := orm.Extract(orm.Year, Rides.StartedAt, orm.Integer)
 ```
 
 ### Server time, not client time
 
 ```go
 db.Sessions.Update().
-    Set(Sessions.SeenAt.SetExpr(orm.Now[Session]())).
+    Set(Sessions.SeenAt.SetExpr(orm.Now())).
     Where(Sessions.ID.Eq(id)).
     Exec(ctx)
 ```
@@ -1185,7 +1185,7 @@ server's may be seconds away from it, and in a cluster, away from itself.
 ### Adding an interval
 
 ```go
-expires := orm.AddInterval(orm.Of(Tokens.IssuedAt), orm.IntervalOf(24*time.Hour))
+expires := orm.AddInterval(Tokens.IssuedAt, orm.Val(orm.IntervalOf(0, 1, 0)))
 ```
 
 ### Anything expiring in the next hour

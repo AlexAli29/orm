@@ -17,6 +17,7 @@
 package doccheck
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -396,4 +397,165 @@ func TestDocs_genericTypesAreNotCalled(t *testing.T) {
 				s.file, m[1], sym)
 		}
 	}
+}
+
+// The call-shape check.
+//
+// The three tests above ask whether a name exists. None of them asks whether
+// the call around it is well formed, and that gap is not theoretical: the
+// documentation taught Update(ctx) for a method taking none, Set(column, value)
+// for one taking an assignment, and orm.Window[Ride]() for a function with no
+// type parameters at all. Every one of those named something real and none of
+// them would compile.
+//
+// So this reads the signatures out of the packages and compares them with the
+// calls the snippets actually write. It is deliberately one-sided about type
+// arguments: supplying fewer than declared is ordinary inference and always
+// allowed, while supplying more than exist cannot be anything but a mistake.
+// Value arguments are exact, except for a variadic tail.
+//
+// Only package-level functions are checked. A method's signature depends on its
+// receiver, which a snippet does not name and this cannot resolve — so the
+// receiver-blind arity of a method would accept whatever the loosest overload
+// takes, which is worse than not asking.
+
+type sig struct {
+	typeParams int
+	params     int
+	variadic   bool
+}
+
+func signaturesOf(t *testing.T, dir string) map[string]sig {
+	t.Helper()
+	out := map[string]sig{}
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatalf("parsing %s: %v", dir, err)
+	}
+	count := func(fl *ast.FieldList) int {
+		if fl == nil {
+			return 0
+		}
+		n := 0
+		for _, f := range fl.List {
+			if len(f.Names) == 0 {
+				n++ // an unnamed parameter still occupies a position
+				continue
+			}
+			n += len(f.Names)
+		}
+		return n
+	}
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || fn.Recv != nil || !fn.Name.IsExported() {
+					continue
+				}
+				s := sig{typeParams: count(fn.Type.TypeParams), params: count(fn.Type.Params)}
+				if n := fn.Type.Params; n != nil && len(n.List) > 0 {
+					if _, ok := n.List[len(n.List)-1].Type.(*ast.Ellipsis); ok {
+						s.variadic = true
+					}
+				}
+				out[fn.Name.Name] = s
+			}
+		}
+	}
+	return out
+}
+
+// parseSnippet gets an AST out of a fragment. Most snippets are statements, some
+// are declarations, and some are neither — an elided chain, a line with a
+// comment standing in for an argument. The unparseable ones are counted rather
+// than failed on, because a cookbook that cannot show a fragment is a worse
+// cookbook.
+func parseSnippet(body string) (*ast.File, bool) {
+	fset := token.NewFileSet()
+	if f, err := parser.ParseFile(fset, "", "package p\n"+body, 0); err == nil {
+		return f, true
+	}
+	wrapped := "package p\nfunc _() {\n" + body + "\n}\n"
+	if f, err := parser.ParseFile(fset, "", wrapped, 0); err == nil {
+		return f, true
+	}
+	return nil, false
+}
+
+func TestDocs_callsMatchTheirSignatures(t *testing.T) {
+	sigs := map[string]map[string]sig{}
+	for qualifier, dir := range packages {
+		sigs[qualifier] = signaturesOf(t, dir)
+	}
+
+	var parsed, skipped int
+	for _, sn := range goSnippets(t) {
+		file, ok := parseSnippet(sn.body)
+		if !ok {
+			skipped++
+			continue
+		}
+		parsed++
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			// Peel the type arguments, which the parser reports as an index.
+			fun, typeArgs := call.Fun, 0
+			switch idx := fun.(type) {
+			case *ast.IndexExpr:
+				fun, typeArgs = idx.X, 1
+			case *ast.IndexListExpr:
+				fun, typeArgs = idx.X, len(idx.Indices)
+			}
+
+			selector, ok := fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			pkg, ok := selector.X.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			known, ok := sigs[pkg.Name]
+			if !ok {
+				return true
+			}
+			want, ok := known[selector.Sel.Name]
+			if !ok {
+				return true // an unknown name is the other tests' business
+			}
+
+			where := fmt.Sprintf("%s:%d", sn.file, sn.line)
+			name := pkg.Name + "." + selector.Sel.Name
+
+			if typeArgs > want.typeParams {
+				t.Errorf("%s calls %s with %d type argument(s); it declares %d",
+					where, name, typeArgs, want.typeParams)
+			}
+
+			// A call spreading a slice says nothing about how many the callee wants.
+			if call.Ellipsis.IsValid() {
+				return true
+			}
+			switch {
+			case want.variadic && len(call.Args) < want.params-1:
+				t.Errorf("%s calls %s with %d argument(s); it wants at least %d",
+					where, name, len(call.Args), want.params-1)
+			case !want.variadic && len(call.Args) != want.params:
+				t.Errorf("%s calls %s with %d argument(s); it takes %d",
+					where, name, len(call.Args), want.params)
+			}
+			return true
+		})
+	}
+
+	t.Logf("checked calls in %d snippets; %d were fragments that do not parse", parsed, skipped)
 }

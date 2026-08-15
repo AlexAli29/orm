@@ -210,7 +210,7 @@ var deltas = orm.Project3(
 ### Нарастающий баланс
 
 ```go
-running := orm.SumInt32[orm.Composed, int64](orm.Of(Entries.AmountCents)).
+running := orm.SumInt32[orm.Composed](orm.Of(Entries.AmountCents)).
     Over(orm.Window().
         PartitionBy(orm.Of(Entries.AccountID)).
         OrderBy(orm.Of(Entries.PostedAt).Asc()).

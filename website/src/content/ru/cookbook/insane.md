@@ -10,7 +10,7 @@ description: Те, ради которых обычно берутся за сы
 Классика. Оконная функция внутри производной таблицы, фильтрация снаружи — потому что оконная функция не может стоять в `WHERE`.
 
 ```go
-rank := orm.Named("rn", orm.RowNumber[orm.Composed]().
+rank := orm.Named("rn", orm.RowNumber().
     PartitionBy(orm.Of(Orders.UserID)).
     OrderBy(orm.Of(Orders.Placed).Desc()))
 
@@ -43,7 +43,7 @@ running := orm.Named("running", orm.SumInt64[orm.Composed, int64](orm.Of(Orders.
 ```go
 grp := orm.Named("grp", orm.Sub(
     orm.Of(Events.Day),
-    orm.RowNumber[orm.Composed]().OrderBy(orm.Of(Events.Day).Asc()),
+    orm.RowNumber().OrderBy(orm.Of(Events.Day).Asc()),
 ))
 
 islands := orm.Sub("islands", orm.Rows(
@@ -152,7 +152,10 @@ orm.Select(db.Orders, pivot).GroupBy(Orders.UserID)
 Таблица, представление и матпредставление в одном результате — законно, потому что проекции одинаковы:
 
 ```go
-shape := orm.Project2(/* uuid, text */)
+shape := orm.Project2(
+    orm.Of(Users.ID), orm.Of(Users.Email),
+    func(id uuid.UUID, email string) Row { return Row{id, email} },
+)
 
 email := orm.Named("email", orm.Of(Users.Email))
 
