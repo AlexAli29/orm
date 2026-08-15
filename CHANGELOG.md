@@ -4,6 +4,87 @@ This project follows [semantic versioning](https://semver.org). Before v1.0 the
 exported API may change between minor versions; it will not change without an
 entry here.
 
+## v0.2.0 — 2026-08-15
+
+A minor rather than a patch: three additive features and one behaviour that was
+wrong. Nothing was removed and no signature changed, so v0.1.0 code compiles
+unchanged.
+
+### Managed mode can ask for referential actions
+
+**Added** — two directives in the tag grammar.
+
+- `ondelete:` and `onupdate:` take `cascade`, `restrict`, `setnull`,
+  `setdefault` or `noaction`, written without a space because a struct tag is one
+  token to everything that reads it and `setnull` versus `set null` is the same
+  intent with different outcomes.
+
+```go
+Post   orm.One[Post] `orm:"side:local,ondelete:cascade"`
+Author orm.One[User] `orm:"side:local,ondelete:restrict,onupdate:cascade"`
+```
+
+They are read in managed mode only. In database-first the constraint already
+exists and PostgreSQL's answer is the one that counts.
+
+**Fixed — and it silently changed schemas.** `schema.ForeignKey` always carried
+`OnDelete` and `OnUpdate`, the SQL writer always emitted them, the diff always
+compared them and introspection always read `confdeltype`. The only missing
+piece was a way for an author to ask, so the desired schema built every
+constraint with the zero value — and the diff normalises that to `NO ACTION`.
+A database whose constraint said `CASCADE` therefore disagreed with a
+declaration that could not say anything, and `makemigrations` planned to replace
+the cascade. Adopting managed mode on a schema that cascaded removed the
+cascades at the first plan, without a word.
+
+If you adopted managed mode before this release, check `confdeltype` in
+`pg_constraint` against what your schema had, and write the tags before the next
+plan.
+
+### Migrations can carry data
+
+**Added** — a flag.
+
+- `orm makemigrations --empty` writes a migration whose single operation is a
+  `raw_sql` stub, whether or not the models moved, because data is exactly what
+  the schema diff cannot see. Unnamed, it is called `data` rather than `auto`:
+  nothing was derived, so a derived-sounding name would be a lie.
+
+The stub raises an exception rather than doing nothing. An empty statement is
+rejected when the migration is written and a comment would apply cleanly and do
+nothing, which is worse — a migration whose contents were forgotten would be
+recorded as applied and never run again.
+
+`raw_sql` itself is not new; it has always been an operation the artifact
+encodes, with `Up`, `Down`, `Atomic` and `Description`, and `state_only` beside
+it for SQL that does change the schema. It was never documented, which is why
+the migrations page implied migrations could hold only schema operations.
+
+### Wider projections
+
+**Added** — 42 constructors.
+
+- `orm.Project9` through `orm.Project50`, generated from the same twelve lines
+  as the hand-written eight. A sixteen-column reporting row is ordinary and used
+  to have no answer at all.
+
+`Project1` through `Project8` are untouched: their type parameters are named
+`A, B, C, D, F, G, H, I` and those names are in the manifest, so regenerating
+them under a scheme that reaches fifty would read as an API change without being
+one. The generated ones use `T1..TN`.
+
+### The CLI as an image
+
+**Added** — two images, published to `ghcr.io` on release.
+
+- `ghcr.io/alexali29/orm` is the binary on distroless, 16 MB, no shell, non-root.
+  It covers `migrate`, `sqlmigrate` and `inspect`.
+- `ghcr.io/alexali29/orm:…-toolchain` adds Go, which `check`, `generate` and
+  `makemigrations` need in order to read entity source through `go list`.
+
+Asked for one of those three, the small image fails with `go command required,
+not found` rather than producing a wrong answer.
+
 ## v0.1.0 — 2026-08-14
 
 ### UNION ALL — in progress
