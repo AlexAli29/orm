@@ -279,6 +279,60 @@ func TestBuild_foreignKeys(t *testing.T) {
 	if len(comments.ForeignKeys) != 2 {
 		t.Fatalf("comment foreign keys = %+v, want two", comments.ForeignKeys)
 	}
+
+	// A relation with no action tag asks for nothing, which is PostgreSQL's
+	// NO ACTION. Saying so explicitly would be a change to the constraint.
+	if fk.OnDelete != "" || fk.OnUpdate != "" {
+		t.Errorf("posts_author_id_fkey = %+v, want no referential actions", fk)
+	}
+}
+
+// The referential actions a relation declares reach the constraint.
+//
+// Without them managed mode could not express ON DELETE CASCADE at all, and
+// worse: a database that already had one drifted against a declaration with no
+// way to say it, so makemigrations planned to replace the cascade with NO
+// ACTION. The schema type always carried the fields and the SQL writer always
+// emitted them — the only thing missing was a way for an author to ask.
+func TestBuild_referentialActions(t *testing.T) {
+	s := build(t)
+	comments := table(t, s, "comments")
+
+	byName := map[string]schema.ForeignKey{}
+	for _, fk := range comments.ForeignKeys {
+		byName[fk.Name] = fk
+	}
+
+	post, ok := byName["comments_post_id_fkey"]
+	if !ok {
+		t.Fatalf("constraints = %+v, want one on post_id", comments.ForeignKeys)
+	}
+	if post.OnDelete != schema.Cascade {
+		t.Errorf("on delete = %q, want %q", post.OnDelete, schema.Cascade)
+	}
+	if post.OnUpdate != "" {
+		t.Errorf("on update = %q, want nothing; only ondelete was declared", post.OnUpdate)
+	}
+
+	author, ok := byName["comments_author_id_fkey"]
+	if !ok {
+		t.Fatalf("constraints = %+v, want one on author_id", comments.ForeignKeys)
+	}
+	if author.OnDelete != schema.Restrict || author.OnUpdate != schema.Cascade {
+		t.Errorf("author actions = %q/%q, want RESTRICT/CASCADE", author.OnDelete, author.OnUpdate)
+	}
+
+	// And they reach the rendered schema, which is the only part a database sees.
+	var buf strings.Builder
+	if err := schema.Text(&buf, s); err != nil {
+		t.Fatalf("rendering: %v", err)
+	}
+	if !strings.Contains(buf.String(), "ON DELETE CASCADE") {
+		t.Errorf("the rendered schema has no ON DELETE CASCADE:\n%s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "ON UPDATE CASCADE") {
+		t.Errorf("the rendered schema has no ON UPDATE CASCADE:\n%s", buf.String())
+	}
 }
 
 // A unique tag and a unique declaration both produce constraints, named the way

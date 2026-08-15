@@ -307,6 +307,8 @@ func (b *builder) foreignKey(e *model.GoEntity, f model.GoField, from *schema.Ta
 	fk := schema.ForeignKey{
 		Name: name, Columns: cols,
 		RefSchema: to.Schema, RefTable: to.Name, RefColumns: slices.Clone(to.PrimaryKey.Columns),
+		OnDelete: schema.Action(f.Tags.OnDelete),
+		OnUpdate: schema.Action(f.Tags.OnUpdate),
 	}
 
 	// A constraint the author already declared with the same name has to agree

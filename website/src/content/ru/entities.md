@@ -41,6 +41,8 @@ type UserSummary struct { /* ... */ }
 | `generated:expr` | Генерируемая колонка |
 | `fk:user_id` | Колонка внешнего ключа для связи |
 | `side:...` | Сторона связи |
+| `ondelete:cascade` | Действие `ON DELETE` для связи |
+| `onupdate:cascade` | Действие `ON UPDATE` для связи |
 | `-` | Полностью игнорировать поле |
 
 ```go
@@ -57,6 +59,41 @@ type Order struct {
     User orm.One[User] `orm:"fk:user_id"`
 }
 ```
+
+
+### Ссылочные действия
+
+`ondelete` и `onupdate` принимают `cascade`, `restrict`, `setnull`, `setdefault`
+или `noaction`. Пишутся без пробела, потому что для всего, что читает
+структурный тег, это один токен:
+
+```go
+//orm:table comments
+type Comment struct {
+    ID     int64 `orm:"pk,identity"`
+    PostID int64
+
+    // Deleting a post deletes its comments, in the database, in one statement.
+    Post orm.One[Post] `orm:"side:local,ondelete:cascade"`
+
+    // Deleting a user with comments is refused instead.
+    Author orm.One[User] `orm:"side:local,ondelete:restrict"`
+}
+```
+
+Читаются только в управляемом режиме. В database-first ограничение уже
+существует, и решает ответ PostgreSQL, так что тег с другим требованием был бы
+пожеланием, а не фактом.
+
+Ничего не написать — значит `NO ACTION`, умолчание PostgreSQL, и в управляемом
+режиме это утверждение, а не отсутствие. База, где ограничение говорит
+`CASCADE`, и объявление, которое молчит, расходятся, и `makemigrations`
+запланирует замену каскада. Если вы переводите на управляемый режим базу, где
+каскад уже есть, напишите тег до первого плана.
+
+Это каскад уровня базы данных — не то же самое, что каскады уровня приложения,
+которых в этой библиотеке нет. Схемой владеет PostgreSQL, и `ON DELETE CASCADE`
+— часть схемы; ничто здесь не удаляет строки на стороне Go за вас.
 
 ## Nullability
 

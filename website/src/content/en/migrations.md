@@ -53,6 +53,50 @@ Two frozen boundaries:
 
 They are prerequisites, not schema change, and pretending otherwise would make `orm migrate` a thing you run as a superuser.
 
+## Data, and the raw escape hatch
+
+A generated migration describes schema operations, and there is nowhere in
+`create table` or `add column` to put rows. That is not the whole story though,
+and these docs have been letting people believe it was.
+
+The artifact is JSON, and one of the operations it encodes is `raw_sql`. Adding
+one to a generated migration is an edit to a file you already review:
+
+```json
+{
+  "op": "raw_sql",
+  "args": {
+    "Up": "INSERT INTO user_tags (text) VALUES ('music'), ('sports') ON CONFLICT (text) DO NOTHING",
+    "Down": "DELETE FROM user_tags WHERE text IN ('music', 'sports')",
+    "Atomic": true,
+    "Description": "seed the starting tags"
+  }
+}
+```
+
+`Down` is optional, and its absence is what makes the operation irreversible —
+stated rather than faked with a no-op that claims to have undone something.
+`Atomic` says whether it may run inside a transaction.
+
+This is also what makes the three-step column change possible, which is otherwise
+out of reach for any tool that models only schema:
+
+1. add the column, nullable
+2. `raw_sql` to backfill it
+3. set it `NOT NULL`
+
+The engine does not parse the SQL, so `raw_sql` changes nothing in the migration
+state and reports itself as destructive — the cautious assumption about something
+it cannot read. If your SQL *does* change the schema, pair it with `state_only`
+so the state stays true; otherwise the next plan tries to make the change again.
+
+Seed data is the easier case and the same mechanism. Whether it belongs in a
+migration or in a separate seed step is a real choice: a migration runs once per
+database and is reviewed with the schema change it belongs to, while a seed file
+re-run on every deploy needs `ON CONFLICT DO NOTHING` and a unique constraint for
+it to key on. Reference data the schema is meaningless without belongs in the
+migration. A developer's convenience fixtures do not.
+
 ## Materialized views
 
 A materialized view holds rows computed from a body, so changing that body is not a column change — the rows are wrong afterwards. The planner refuses a definition change rather than silently rebuilding, and tells you to write an explicit migration.

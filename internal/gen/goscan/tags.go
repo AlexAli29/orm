@@ -50,6 +50,8 @@ const (
 	tagDefault   = "default"
 	tagGenerated = "generated"
 	tagPGType    = "pgtype"
+	tagOnDelete  = "ondelete"
+	tagOnUpdate  = "onupdate"
 )
 
 // valuelessTags are the directives written as a bare word.
@@ -113,6 +115,18 @@ func ParseTags(structTag string) (model.FieldTags, error) {
 		switch key {
 		case tagColumn:
 			tags.Column = value
+		case tagOnDelete:
+			if act, ok := referentialAction(value); ok {
+				tags.OnDelete = act
+			} else {
+				fail(fmt.Errorf("ondelete:%s is not a referential action; use %s", value, actionList))
+			}
+		case tagOnUpdate:
+			if act, ok := referentialAction(value); ok {
+				tags.OnUpdate = act
+			} else {
+				fail(fmt.Errorf("onupdate:%s is not a referential action; use %s", value, actionList))
+			}
 		case tagFK:
 			tags.FK = value
 		case tagSide:
@@ -210,4 +224,25 @@ func splitDirectives(raw string) []string {
 		}
 	}
 	return append(out, raw[start:])
+}
+
+// The referential actions, written the way a tag writes them and stored the way
+// SQL spells them.
+//
+// They are spelled without spaces in a tag because a struct tag is one token to
+// anything that reads it and a space inside a directive is a trap. "setnull"
+// and "set null" would otherwise be the same intent with different outcomes.
+var actions = map[string]string{
+	"cascade":    "CASCADE",
+	"restrict":   "RESTRICT",
+	"setnull":    "SET NULL",
+	"setdefault": "SET DEFAULT",
+	"noaction":   "NO ACTION",
+}
+
+const actionList = "cascade, restrict, setnull, setdefault or noaction"
+
+func referentialAction(v string) (string, bool) {
+	act, ok := actions[strings.ToLower(strings.TrimSpace(v))]
+	return act, ok
 }

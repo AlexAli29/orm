@@ -41,6 +41,8 @@ Everything else is a struct tag under the `orm` key:
 | `generated:expr` | A generated column |
 | `fk:user_id` | The foreign key column backing a relation |
 | `side:...` | Which side of a relation this field is |
+| `ondelete:cascade` | The relation's `ON DELETE` action |
+| `onupdate:cascade` | The relation's `ON UPDATE` action |
 | `-` | Ignore this field entirely |
 
 ```go
@@ -57,6 +59,42 @@ type Order struct {
     User orm.One[User] `orm:"fk:user_id"`
 }
 ```
+
+
+### Referential actions
+
+`ondelete` and `onupdate` take `cascade`, `restrict`, `setnull`, `setdefault` or
+`noaction`. They are written without a space, because a struct tag is one token
+to everything that reads it:
+
+```go
+//orm:table comments
+type Comment struct {
+    ID     int64 `orm:"pk,identity"`
+    PostID int64
+
+    // Deleting a post deletes its comments, in the database, in one statement.
+    Post orm.One[Post] `orm:"side:local,ondelete:cascade"`
+
+    // Deleting a user with comments is refused instead.
+    Author orm.One[User] `orm:"side:local,ondelete:restrict"`
+}
+```
+
+They are read in managed mode only. In database-first the constraint already
+exists and PostgreSQL's answer is the one that counts, so a tag asking for
+something else would be a wish rather than a fact.
+
+Saying nothing means `NO ACTION`, which is PostgreSQL's default — and in managed
+mode that is a claim, not an absence. A database whose constraint says `CASCADE`
+and a declaration that says nothing disagree, and `makemigrations` plans to
+replace the cascade. If you are adopting managed mode on a database that already
+cascades, write the tag before the first plan.
+
+This is a database-level cascade, which is a different thing from the
+application-level cascades this ORM does not have. PostgreSQL owns the schema,
+and `ON DELETE CASCADE` is part of the schema; nothing here deletes rows in Go
+on your behalf.
 
 ## Nullability
 

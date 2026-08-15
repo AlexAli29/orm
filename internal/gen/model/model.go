@@ -278,6 +278,15 @@ type FieldTags struct {
 	// side instead of letting reconciliation derive it.
 	Side    FKSide
 	HasSide bool
+	// OnDelete and OnUpdate carry the relation's referential actions, as the
+	// canonical SQL spelling ("CASCADE", "SET NULL"). Empty means the tag said
+	// nothing, which is PostgreSQL's default of NO ACTION.
+	//
+	// They are read only in managed mode, like the rest of the desired-schema
+	// directives below. A database-first project takes whatever the constraint
+	// already says, because PostgreSQL owns it.
+	OnDelete string
+	OnUpdate string
 	// Type selects a configured type mapping by key.
 	Type string
 

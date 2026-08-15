@@ -72,8 +72,8 @@ type Comment struct {
 	Body      string
 	CreatedAt time.Time `orm:"default:now()"`
 
-	Post   orm.One[Post] `orm:"side:local"`
-	Author orm.One[User] `orm:"side:local"`
+	Post   orm.One[Post] `orm:"side:local,ondelete:cascade"`
+	Author orm.One[User] `orm:"side:local,ondelete:restrict,onupdate:cascade"`
 }
 
 // Booking declares every range family a managed schema can create.
