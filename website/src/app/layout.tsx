@@ -1,21 +1,66 @@
-import type { Metadata, Viewport } from "next";
-import { SITE_URL } from "@/lib/site";
-import "./globals.css";
+import type { Metadata, Viewport } from 'next';
+import { SITE_URL } from '@/lib/site';
+import './globals.css';
+
+const TITLE = 'orm — a schema-reconciling PostgreSQL mapper for Go';
+const DESCRIPTION =
+  'You own your structs. PostgreSQL owns your schema. The generator proves they agree.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: "orm — a schema-reconciling PostgreSQL mapper for Go", template: "%s — orm" },
-  description:
-    "You own your structs. PostgreSQL owns your schema. The generator proves they agree.",
-  icons: { icon: "/favicon.svg" },
+  title: { default: TITLE, template: '%s — orm' },
+  description: DESCRIPTION,
+  applicationName: 'orm',
+  // Terms someone would actually type. A keyword list is worth little to a
+  // search engine and something to the other machines that read this page.
+  keywords: [
+    'Go ORM',
+    'Golang ORM',
+    'PostgreSQL',
+    'pgx',
+    'type-safe SQL',
+    'database migrations',
+    'schema reconciliation',
+    'query builder',
+    'code generation',
+    'PostGIS',
+  ],
+  authors: [{ name: 'AlexAli29', url: 'https://github.com/AlexAli29' }],
+  creator: 'AlexAli29',
+  openGraph: {
+    type: 'website',
+    siteName: 'orm',
+    title: TITLE,
+    description: DESCRIPTION,
+    url: SITE_URL,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      // The default snippet limits are conservative for documentation, where a
+      // longer preview is usually the answer the reader wanted.
+      'max-snippet': -1,
+      'max-image-preview': 'large',
+      'max-video-preview': -1,
+    },
+  },
+  icons: { icon: '/favicon.svg' },
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4fbfd" },
-    { media: "(prefers-color-scheme: dark)", color: "#04141a" },
+    { media: '(prefers-color-scheme: light)', color: '#f4fbfd' },
+    { media: '(prefers-color-scheme: dark)', color: '#04141a' },
   ],
-  width: "device-width",
+  width: 'device-width',
   initialScale: 1,
 };
 
@@ -31,11 +76,26 @@ try {
   var t = localStorage.getItem('theme');
   if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
 } catch (e) {}
+try {
+  // The language of the document, corrected before anything reads it.
+  //
+  // Only one <html> exists and it lives in the root layout, which is above the
+  // [locale] segment and cannot know which language it is wrapping. The static
+  // markup therefore ships lang="en" for every page, and a screen reader would
+  // pronounce the Russian pages as English — which is not a nuance, it is
+  // unusable. This corrects the live DOM, and the hreflang links and og:locale
+  // tell crawlers the same thing in the markup itself.
+  if (location.pathname.indexOf('/ru') === 0) document.documentElement.lang = 'ru';
+} catch (e) {}
 `;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
