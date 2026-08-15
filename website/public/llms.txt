@@ -44,6 +44,7 @@ The whole of these docs in one file: https://ormgo.vercel.app/llms-full.txt
 - [Query recipes](https://ormgo.vercel.app/en/docs/cookbook/queries.md): The everyday shapes, written out — filtering, paging, aggregation, joins, windows, upserts, search.
 - [Hard queries](https://ormgo.vercel.app/en/docs/cookbook/insane.md): The ones people reach for raw SQL to write — composed, typed, and still one statement.
 - [Project architectures](https://ormgo.vercel.app/en/docs/cookbook/architecture.md): Four layouts that work, and what each one is actually for.
+- [A real application](https://ormgo.vercel.app/en/docs/cookbook/real-world.md): The persistence layer of a running service, taken from its source rather than invented.
 
 ## Operations
 

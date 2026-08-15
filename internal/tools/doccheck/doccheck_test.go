@@ -258,7 +258,7 @@ func TestDocs_methodsExist(t *testing.T) {
 		// Generated code and third-party packages the examples use. A generated
 		// DB has Tx and TxOptions; pgxpool has NewWithConfig; a docs example may
 		// name a router or a server of its own.
-		"Tx": true, "TxOptions": true, "NewWithConfig": true, "Connect": true,
+		"Tx": true, "TxOptions": true, "Executor": true, "NewWithConfig": true, "Connect": true,
 		"Exit": true, "Routes": true, "Handler": true, "WithImage": true,
 		"WithErrorMessages": true, "WithMigrationState": true, "Rows": true,
 		"Text": true, "WithSchemaCheck": true, "Quick": true, "Deep": true,

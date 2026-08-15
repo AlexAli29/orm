@@ -71,6 +71,7 @@ export const nav: NavSection[] = [
       { slug: "cookbook/queries", title: { en: "Query recipes", ru: "Рецепты запросов" } },
       { slug: "cookbook/insane", title: { en: "Hard queries", ru: "Сложные запросы" } },
       { slug: "cookbook/architecture", title: { en: "Project architectures", ru: "Архитектуры проектов" } },
+      { slug: "cookbook/real-world", title: { en: "A real application", ru: "Настоящее приложение" } },
     ],
   },
   {
