@@ -273,6 +273,51 @@ check:
 	go run github.com/AlexAli29/orm/cmd/orm check --generated
 ```
 
+## Running the CLI from a container
+
+If you would rather not install Go on a CI runner, the CLI is published as an
+image. There are two, because the commands differ in what they need:
+
+```console
+$ docker run --rm -v "$PWD":/work -e DATABASE_URL \
+    ghcr.io/alexali29/orm:latest migrate --config /work/orm.yaml
+Applying 0001_initial ... OK
+```
+
+`ghcr.io/alexali29/orm` is the CLI on distroless — about 16 MB, no shell, no
+libc, running as a non-root user. It covers `migrate`, `sqlmigrate` and
+`inspect`, which is the deploy-time set.
+
+`ghcr.io/alexali29/orm:latest-toolchain` adds Go. `check`, `generate` and
+`makemigrations` read your entity source through `go list`, so they need a
+toolchain and a module that resolves — and mounting your module is not enough if
+its dependencies are not there:
+
+```console
+$ docker run --rm -v "$PWD":/work -e DATABASE_URL \
+    ghcr.io/alexali29/orm:latest-toolchain check --config /work/orm.yaml
+reconciliation clean: the entities and the schema agree
+```
+
+Asking the small image for one of those three fails immediately and says why —
+`go command required, not found` — rather than producing a wrong answer. That is
+the reason the split exists rather than one image that sometimes works.
+
+Both are built for `linux/amd64` and `linux/arm64`. Tags follow releases:
+`1.2.3`, `1.2`, `latest`, and `edge` for the tip of main.
+
+### In a pipeline
+
+```yaml
+migrate:
+  image: ghcr.io/alexali29/orm:latest
+  script:
+    - orm migrate --config orm.yaml
+```
+
+The entrypoint is the binary, so the arguments are the command. Nothing needs a
+shell, which is worth having in a step whose environment holds a database URL.
+
 
 ---
 

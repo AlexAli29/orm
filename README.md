@@ -38,6 +38,17 @@ $ go install github.com/AlexAli29/orm/cmd/orm@latest
 Go 1.24 and PostgreSQL 14 or newer. The only runtime dependency is
 [pgx](https://github.com/jackc/pgx).
 
+Or run the CLI from a container, with no Go installed:
+
+```console
+$ docker run --rm -v "$PWD":/work -e DATABASE_URL \
+    ghcr.io/alexali29/orm:latest migrate --config /work/orm.yaml
+```
+
+That image is the binary on distroless — 16 MB, no shell, non-root. `check`,
+`generate` and `makemigrations` read your Go source, so they need the
+`-toolchain` tag instead. See [Installation](https://ormgo.vercel.app/en/docs/installation/).
+
 ## Use
 
 ```console
@@ -88,7 +99,8 @@ destination that cannot hold NULL.
 
 - **PostgreSQL only.** Not a portable abstraction over four databases.
 - **No `AUTO MIGRATE`.** [Managed mode](docs/migrations.md) writes migration files you read and apply on purpose.
-- **No lazy loading, no identity map, no dirty tracking, no cascades, no hooks, no second-level cache.**
+- **No lazy loading, no identity map, no dirty tracking, no hooks, no second-level cache.**
+- **No application-level cascades.** Nothing deletes rows in Go on your behalf. `ON DELETE CASCADE` is a schema property and managed mode writes it when you ask (`ondelete:cascade`); PostgreSQL performs it.
 - **No hidden zero-value semantics.** `Active: false` stores `false`.
 
 ## Documentation

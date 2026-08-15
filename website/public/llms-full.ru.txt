@@ -272,6 +272,52 @@ check:
 	go run github.com/AlexAli29/orm/cmd/orm check --generated
 ```
 
+## Запуск CLI из контейнера
+
+Если ставить Go на CI-раннер не хочется, CLI публикуется образом. Их два, потому
+что командам нужно разное:
+
+```console
+$ docker run --rm -v "$PWD":/work -e DATABASE_URL \
+    ghcr.io/alexali29/orm:latest migrate --config /work/orm.yaml
+Applying 0001_initial ... OK
+```
+
+`ghcr.io/alexali29/orm` — это CLI на distroless: около 16 МБ, без оболочки, без
+libc, запуск не от root. Он покрывает `migrate`, `sqlmigrate` и `inspect` —
+набор для развёртывания.
+
+`ghcr.io/alexali29/orm:latest-toolchain` добавляет Go. `check`, `generate` и
+`makemigrations` читают исходники сущностей через `go list`, поэтому им нужен
+тулчейн и модуль, который разрешается, — а смонтировать свой модуль
+недостаточно, если его зависимостей рядом нет:
+
+```console
+$ docker run --rm -v "$PWD":/work -e DATABASE_URL \
+    ghcr.io/alexali29/orm:latest-toolchain check --config /work/orm.yaml
+reconciliation clean: the entities and the schema agree
+```
+
+Если попросить у маленького образа одну из этих трёх команд, он сразу падает и
+говорит почему — `go command required, not found`, — а не выдаёт неверный ответ.
+Ради этого разделение и существует, вместо одного образа, который иногда
+работает.
+
+Оба собираются под `linux/amd64` и `linux/arm64`. Теги следуют за релизами:
+`1.2.3`, `1.2`, `latest` и `edge` для вершины main.
+
+### В пайплайне
+
+```yaml
+migrate:
+  image: ghcr.io/alexali29/orm:latest
+  script:
+    - orm migrate --config orm.yaml
+```
+
+Точка входа — сам бинарник, поэтому аргументы и есть команда. Оболочка нигде не
+нужна, что ценно в шаге, окружение которого держит строку подключения к базе.
+
 
 ---
 

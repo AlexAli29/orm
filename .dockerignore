@@ -1,0 +1,12 @@
+# The build needs the module and the Go source, and nothing else. The website
+# alone is tens of megabytes of node_modules that would be sent to the daemon
+# on every build and used by none of it.
+website/
+.git/
+.github/
+docs/
+examples/*/migrations/
+uuidcompat/
+*.md
+!go.mod
+!go.sum

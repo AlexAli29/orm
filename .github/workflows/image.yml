@@ -1,0 +1,90 @@
+# Publishing the CLI as an image.
+#
+# Two images from one Dockerfile, because the commands need different things:
+# the runtime image is the CLI on distroless and runs migrate, sqlmigrate and
+# inspect; the toolchain image adds Go, which check, generate and makemigrations
+# need in order to read your entity source.
+#
+# Tags land on ghcr.io, which needs no account beyond the one pushing this
+# repository. A release tag publishes a version; main publishes edge, so that
+# somebody tracking the tip has something to track that is not latest.
+name: image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    # Built but not pushed, so a Dockerfile that stopped building is a failed
+    # check rather than a discovery made at release time.
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: runtime
+            suffix: ""
+          - target: toolchain
+            suffix: "-toolchain"
+    steps:
+      - uses: actions/checkout@v4
+
+      # QEMU is only needed by the toolchain image, whose apk step runs in the
+      # target architecture. The runtime image cross-compiles on the builder and
+      # its final stage is a copy, so it needs no emulation at all.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: log in to ghcr.io
+        # Skipped for pull requests from forks, which have no package write.
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          flavor: |
+            suffix=${{ matrix.suffix }},onlatest=true
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=edge,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || format('edge-{0}', github.sha) }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+      # A published image that does not run is worse than no image. This runs
+      # the thing that was just built, for the architecture the runner is.
+      - name: the image runs
+        if: github.event_name == 'pull_request'
+        run: |
+          docker build --target ${{ matrix.target }} -t check:local .
+          docker run --rm check:local version
