@@ -253,7 +253,8 @@ func TestDocs_methodsExist(t *testing.T) {
 		"Run": true, "Handle": true, "ListenAndServe": true, "Shutdown": true,
 		"Chunk": true, "Contains": true, "Replace": true, "Split": true,
 		"ByID": true, "Save": true, "Search": true, "Items": true, "Walk": true,
-		"Duration": true, "Bounds": true,
+		"Duration": true, "Bounds": true, "ParseConfig": true,
+		"WithTimeout": true,
 		// Generated code and third-party packages the examples use. A generated
 		// DB has Tx and TxOptions; pgxpool has NewWithConfig; a docs example may
 		// name a router or a server of its own.
@@ -558,4 +559,89 @@ func TestDocs_callsMatchTheirSignatures(t *testing.T) {
 	}
 
 	t.Logf("checked calls in %d snippets; %d were fragments that do not parse", parsed, skipped)
+}
+
+// The structure check.
+//
+// The parity test above compares Go blocks and says nothing about anything else,
+// which is how a yaml example came to sit under the wrong heading in Russian:
+// the Go blocks still matched one for one, and every block after the untracked
+// yaml one had quietly shifted up by a section.
+//
+// Headings are translated, so their text cannot be compared. Their shape can.
+// A page and its translation must have the same sequence of heading levels and
+// the same sequence of fence languages — which is enough to catch a section that
+// was dropped, doubled, or filled with the wrong example.
+
+var (
+	heading  = regexp.MustCompile(`(?m)^(#{2,6}) `)
+	anyFence = regexp.MustCompile("(?m)^```([a-z]*)")
+)
+
+func TestDocs_translationsHaveTheSameStructure(t *testing.T) {
+	shapeOf := func(src string) (levels []int, langs []string) {
+		for _, m := range heading.FindAllStringSubmatch(src, -1) {
+			levels = append(levels, len(m[1]))
+		}
+		for _, m := range anyFence.FindAllStringSubmatch(src, -1) {
+			langs = append(langs, m[1])
+		}
+		return levels, langs
+	}
+
+	en := filepath.Join(contentDir, "en")
+	err := filepath.WalkDir(en, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+			return err
+		}
+		rel, err := filepath.Rel(en, path)
+		if err != nil {
+			return err
+		}
+		other := filepath.Join(contentDir, "ru", rel)
+
+		a, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		b, err := os.ReadFile(other)
+		if err != nil {
+			t.Errorf("%s has no Russian counterpart", rel)
+			return nil
+		}
+
+		enLevels, enLangs := shapeOf(string(a))
+		ruLevels, ruLangs := shapeOf(string(b))
+
+		// A fence sequence is opening and closing markers interleaved; comparing
+		// the whole sequence covers both, and the language is only on the opener.
+		if len(enLangs) != len(ruLangs) {
+			t.Errorf("%s has %d fences in English and %d in Russian", rel, len(enLangs), len(ruLangs))
+		} else {
+			for i := range enLangs {
+				if enLangs[i] != ruLangs[i] {
+					t.Errorf("%s: fence %d is %q in English and %q in Russian",
+						rel, i, enLangs[i], ruLangs[i])
+					break
+				}
+			}
+		}
+
+		if len(enLevels) != len(ruLevels) {
+			t.Errorf("%s has %d headings in English and %d in Russian — a section was "+
+				"dropped or added in translation", rel, len(enLevels), len(ruLevels))
+			return nil
+		}
+		for i := range enLevels {
+			if enLevels[i] != ruLevels[i] {
+				t.Errorf("%s: heading %d is level %d in English and level %d in Russian",
+					rel, i, enLevels[i], ruLevels[i])
+				break
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking the English content: %v", err)
+	}
 }

@@ -100,6 +100,305 @@ func main() {
 | Размер команды | 1–3 | 2–6 | 5+ | любой |
 | Разделение потом | больно | возможно | заложено | заложено |
 
+## Приёмы, общие для всех четырёх
+
+Схема раскладки меняется, а это — нет.
+
+### Сборка, один раз, при старте
+
+```go
+func main() {
+    ctx := context.Background()
+
+    cfg, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+    if err != nil {
+        log.Fatal(err)
+    }
+    pool, err := pgxpool.NewWithConfig(ctx, cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer pool.Close()
+
+    db := domain.New(pool)
+    svc := service.New(db)
+
+    log.Fatal(http.ListenAndServe(":8080", routes(svc)))
+}
+```
+
+Всё, что ниже `main`, получает нужное ему. Ничто не тянется к пакетной
+переменной — поэтому любую часть можно протестировать на другой базе без
+build-тегов.
+
+### Сервис принимает хэндл, а не пул
+
+```go
+type Service struct {
+    db *domain.DB
+}
+
+func New(db *domain.DB) *Service { return &Service{db: db} }
+```
+
+Сервис, держащий `*pgxpool.Pool`, вынужден был бы сам собирать хэндл, и тогда в
+него нельзя было бы передать транзакцию — а это следующий приём.
+
+### Транзакция поверх нескольких хранилищ
+
+```go
+func (s *Service) Checkout(ctx context.Context, cart Cart) error {
+    return s.db.Tx(ctx, func(tx *domain.DB) error {
+        order, err := tx.Orders.Insert(ctx, Order{UserID: cart.UserID})
+        if err != nil {
+            return err
+        }
+        for _, line := range cart.Lines {
+            if _, err := tx.Items.Insert(ctx, Item{OrderID: order.ID, SKU: line.SKU}); err != nil {
+                return err
+            }
+        }
+        return nil
+    })
+}
+```
+
+`tx` — не тот же хэндл, что `s.db`, поэтому вызов, случайно ушедший через
+внешний, виден на ревью, а не тихо оказывается вне транзакции.
+
+### Функция, работающая и внутри транзакции, и вне её
+
+Принимайте хэндл параметром и позвольте решать вызывающему:
+
+```go
+func reserve(ctx context.Context, db *domain.DB, sku string, n int32) error {
+    _, err := db.Inventory.Update().
+        Set(Inventory.OnHand.SetExpr(Inventory.OnHand.Sub(n))).
+        Where(Inventory.SKU.Eq(sku)).
+        Where(Inventory.OnHand.Gte(n)).
+        Exec(ctx)
+    return err
+}
+```
+
+Вызванная с `s.db` она сама себе запрос; вызванная с `tx` внутри `Tx` — часть
+транзакции. В самой функции ничего не меняется.
+
+### Исполнитель, обёрнутый один раз
+
+```go
+db := domain.New(orm.Traced(pool, ormslog.New(logger)))
+```
+
+`orm.Traced` оборачивает исполнителя, поэтому каждый запрос через этот хэндл
+трассируется, а всё ниже этой строки о телеметрии не знает. Транзакция,
+начатая от него, наследует обёртку.
+
+### Порты называют то, что нужно ядру
+
+```go
+package core
+
+type UserStore interface {
+    ByID(ctx context.Context, id int64) (User, error)
+    Save(ctx context.Context, u User) error
+}
+```
+
+### И адаптер, который их реализует
+
+```go
+package postgres
+
+type UserStore struct{ db *domain.DB }
+
+func (s UserStore) ByID(ctx context.Context, id int64) (core.User, error) {
+    row, err := s.db.Users.Query().Where(Users.ID.Eq(id)).One(ctx)
+    if err != nil {
+        return core.User{}, err
+    }
+    return core.User{ID: row.ID, Email: row.Email}, nil
+}
+```
+
+Перевод между строкой таблицы и доменным типом — вся работа адаптера. Пропустить
+его — значит сделать типом ядра то, чем случайно оказалась таблица, и тогда порт
+перестаёт быть границей.
+
+### Отображение ошибок базы на границе
+
+```go
+func (s UserStore) ByID(ctx context.Context, id int64) (core.User, error) {
+    row, err := s.db.Users.Query().Where(Users.ID.Eq(id)).One(ctx)
+    switch {
+    case errors.Is(err, orm.ErrNotFound):
+        return core.User{}, core.ErrNotFound
+    case err != nil:
+        return core.User{}, fmt.Errorf("loading user %d: %w", id, err)
+    }
+    return core.User{ID: row.ID, Email: row.Email}, nil
+}
+```
+
+Ядру не следует импортировать `orm`, чтобы узнать, что строки не нашлось. Один
+перевод здесь это обеспечивает.
+
+### Постраничность, не протекающая курсором в домен
+
+```go
+type Page[T any] struct {
+    Items  []T
+    Cursor string
+}
+```
+
+### Контекст до самого низа
+
+```go
+func (s *Service) List(ctx context.Context, f Filter) ([]core.User, error) {
+    return s.store.Search(ctx, f)
+}
+```
+
+Каждый вызов библиотеки принимает контекст и ни один его не сохраняет. Отменённый
+запрос останавливает начатый им SQL — но лишь если контекст протянут, а не
+заменён где-то посередине на `context.Background()`.
+
+### У фонового обработчика свой хэндл
+
+```go
+func worker(ctx context.Context, db *domain.DB) {
+    tick := time.NewTicker(time.Minute)
+    defer tick.Stop()
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-tick.C:
+            if err := sweep(ctx, db); err != nil {
+                log.Error("sweep", "err", err)
+            }
+        }
+    }
+}
+```
+
+Делить пул правильно, делить транзакцию — нет. Обработчик, взявший `tx`, держал
+бы её открытой между тиками.
+
+### Проверки здоровья отвечают на разные вопросы
+
+```go
+mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+    if rep := ormhealth.Quick(r.Context(), pool); !rep.OK() {
+        http.Error(w, rep.String(), http.StatusServiceUnavailable)
+        return
+    }
+    w.WriteHeader(http.StatusOK)
+})
+```
+
+```go
+mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+    rep := ormhealth.Deep(r.Context(), pool, ormhealth.WithSchemaCheck("public"))
+    if !rep.OK() {
+        http.Error(w, rep.String(), http.StatusServiceUnavailable)
+        return
+    }
+    w.WriteHeader(http.StatusOK)
+})
+```
+
+`Quick` спрашивает, отвечает ли база. `Deep` — та ли это база, которую ожидает
+эта сборка, включая применённость миграций. Направить liveness-пробу на глубокую
+значит перезапускать здоровый процесс из-за неприменённой миграции, то есть ровно
+обратное задуманному.
+
+### Завершение в том порядке, который важен
+
+```go
+srv := &http.Server{Addr: ":8080", Handler: routes(svc)}
+
+go func() {
+    <-ctx.Done()
+    shutdown, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+    defer cancel()
+    _ = srv.Shutdown(shutdown)   // stop accepting, let in-flight requests finish
+    pool.Close()                 // only then close the pool
+}()
+```
+
+Закрыть пул первым — значит превратить каждый запрос в полёте в ошибку, а это
+хуже, чем двадцать секунд ожидания.
+
+### Мультиарендность по схемам
+
+```yaml
+packages:
+  - path: ./internal/tenanta/domain
+    schema: tenant_a
+    output: same
+  - path: ./internal/tenantb/domain
+    schema: tenant_b
+    output: same
+```
+
+Два пакета, два набора дескрипторов, один бинарник. Запрос, собранный от одного,
+нельзя выполнить против другого, потому что дескрипторы несут схему.
+
+### Реплика для отчётов
+
+```go
+reports := domain.New(replicaPool)
+
+rows, err := orm.Select(reports.Orders, monthly).GroupBy(Orders.Status).All(ctx)
+```
+
+Второй хэндл поверх второго пула. Больше ничего не меняется, а попытка записи
+через него упадёт на сервере, а не уйдёт молча не туда.
+
+### Тестирование ядра без базы
+
+```go
+type fakeUsers struct{ byID map[int64]core.User }
+
+func (f fakeUsers) ByID(_ context.Context, id int64) (core.User, error) {
+    u, ok := f.byID[id]
+    if !ok {
+        return core.User{}, core.ErrNotFound
+    }
+    return u, nil
+}
+```
+
+Ровно это и покупает порт. Тесты ядра — это карта и никакого сервера.
+
+### Тестирование адаптера против настоящей базы
+
+```go
+func TestUserStore(t *testing.T) {
+    ex := ormtest.Tx(t, pool)
+    store := postgres.UserStore{DB: domain.New(ex)}
+    // ...
+}
+```
+
+Адаптер — тот слой, чья работа целиком состоит в разговоре с PostgreSQL, поэтому
+его тесты разговаривают с PostgreSQL. Подделка базы здесь тестировала бы подделку.
+
+### Конфигурация, прочитанная один раз
+
+```go
+type Config struct {
+    DatabaseURL string
+    MaxConns    int32
+    Addr        string
+}
+```
+
+Структура, заполняемая при старте и передаваемая вниз, вместо `os.Getenv`,
+рассыпанного по всем пакетам, которым случилось понадобиться значение.
+
 ## Правила, верные во всех четырёх
 
 **Сгенерированный код лежит рядом со своими сущностями.** `output: same` кладёт дескрипторы в тот же пакет, что и структуры, поэтому цикл импортов невозможен.
