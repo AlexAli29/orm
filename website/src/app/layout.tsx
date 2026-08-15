@@ -33,11 +33,17 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: SITE_URL,
+    // Named explicitly, and named with an extension. The generated
+    // opengraph-image route has none, which a static host serves as
+    // application/octet-stream and trailingSlash turns into a redirect —
+    // two separate ways for a crawler to end up with no card.
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: 'summary_large_image',
     title: TITLE,
     description: DESCRIPTION,
+    images: ['/og.png'],
   },
   robots: {
     index: true,

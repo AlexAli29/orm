@@ -9,7 +9,8 @@
     "lint": "next lint",
     "prebuild": "node scripts/build-search.mjs && node scripts/build-llms.mjs",
     "search": "node scripts/build-search.mjs",
-    "llms": "node scripts/build-llms.mjs"
+    "llms": "node scripts/build-llms.mjs",
+    "postbuild": "node scripts/og-png.mjs"
   },
   "dependencies": {
     "github-slugger": "^2.0.0",

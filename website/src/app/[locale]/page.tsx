@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { SoftwareSchema } from '@/components/StructuredData';
 import Link from 'next/link';
 import { codeToHtml } from 'shiki';
@@ -6,6 +7,39 @@ import { GopherWithDatabase, GopherFace } from '@/components/Gopher';
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
+}
+
+/*
+  The landing page names its own card.
+
+  opengraph-image.tsx in this segment generates the PNG, and Next also points
+  the segment's og:image at that route — which has no extension and redirects
+  under trailingSlash. Declaring the image here replaces that reference with the
+  copy scripts/og-png.mjs writes beside it, which a crawler can actually fetch.
+*/
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale: raw } = await params;
+  const locale: Locale = isLocale(raw) ? raw : 'en';
+  const card = `/${locale}/og.png`;
+  const title = copy[locale].tagline;
+  return {
+    alternates: {
+      canonical: `/${locale}/`,
+      languages: Object.fromEntries(locales.map((l) => [l, `/${l}/`])),
+    },
+    openGraph: {
+      type: 'website',
+      siteName: 'orm',
+      url: `/${locale}/`,
+      locale: locale === 'ru' ? 'ru_RU' : 'en_US',
+      images: [{ url: card, width: 1200, height: 630, alt: title }],
+    },
+    twitter: { card: 'summary_large_image', images: [card] },
+  };
 }
 
 const copy = {

@@ -29,7 +29,7 @@ export async function generateMetadata({
   const doc = await getDoc(locale, slug.join('/'));
   if (!doc) return {};
   const path = `/${locale}/docs/${slug.join('/')}/`;
-  const card = `/${locale}/opengraph-image`;
+  const card = `/${locale}/og.png`;
   return {
     title: doc.title,
     description: doc.description,
