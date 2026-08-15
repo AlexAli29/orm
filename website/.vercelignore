@@ -1,0 +1,14 @@
+# What `vercel` from the command line must not upload.
+#
+# The deploy that matters is the one GitHub triggers: Vercel clones the repo and
+# builds it there, so nothing is uploaded from here at all. This file is for the
+# times somebody runs the CLI anyway.
+#
+# Without it the CLI sends the working directory as it stands — node_modules and
+# the built output included — which is twelve megabytes and thousands of files,
+# and the free tier stops accepting uploads after five thousand in a day. None of
+# it is needed: Vercel runs npm install and npm run build itself.
+node_modules
+out
+.next
+.vercel
