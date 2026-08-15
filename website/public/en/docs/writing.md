@@ -35,8 +35,8 @@ The named columns are left out of the `INSERT` entirely, so the column's `DEFAUL
 ## Update
 
 ```go
-n, err := db.Users.Update(ctx).
-    Set(Users.Active, false).
+n, err := db.Users.Update().
+    Set(Users.Active.Set(false)).
     Where(Users.CreatedAt.Lt(cutoff)).
     Exec(ctx)
 ```
@@ -44,28 +44,28 @@ n, err := db.Users.Update(ctx).
 An update with no `WHERE` is refused:
 
 ```go
-_, err := db.Users.Update(ctx).Set(Users.Active, false).Exec(ctx)
+_, err := db.Users.Update().Set(Users.Active.Set(false)).Exec(ctx)
 // errors.Is(err, orm.ErrMissingWhere)
 ```
 
 Unless you say every row was meant:
 
 ```go
-db.Users.Update(ctx).Set(Users.Active, false).All().Exec(ctx)
+db.Users.Update().Set(Users.Active.Set(false)).All().Exec(ctx)
 ```
 
 Set from an expression rather than a value:
 
 ```go
-db.Orders.Update(ctx).
-    SetExpr(Orders.Total, Orders.Net.AddCol(Orders.Tax)).
+db.Orders.Update().
+    Set(Orders.Total.SetExpr(Orders.Net.AddCol(Orders.Tax))).
     Where(Orders.ID.Eq(id))
 ```
 
 ## Delete
 
 ```go
-n, err := db.Users.Delete(ctx).Where(Users.ID.Eq(id)).Exec(ctx)
+n, err := db.Users.Delete().Where(Users.ID.Eq(id)).Exec(ctx)
 ```
 
 Same `ErrMissingWhere` rule, for the same reason.
@@ -158,8 +158,8 @@ entity and you cannot tell "already there" from "just written" by looking at it.
 `Exec` returns a count:
 
 ```go
-n, err := db.Users.Update(ctx).
-    Set(Users.Active, false).
+n, err := db.Users.Update().
+    Set(Users.Active.Set(false)).
     Where(Users.CreatedAt.Lt(cutoff)).
     Exec(ctx)
 // n is how many rows changed
@@ -169,14 +169,14 @@ A count answers "how many". When you need "which", wrap the builder:
 
 ```go
 updated, err := orm.UpdateReturningEntity(
-    db.Users.Update(ctx).Set(Users.Active, false).Where(Users.CreatedAt.Lt(cutoff)),
+    db.Users.Update().Set(Users.Active.Set(false)).Where(Users.CreatedAt.Lt(cutoff)),
 ).All(ctx)
 // []User — every row that matched, as it is after the update
 ```
 
 ```go
 deleted, err := orm.DeleteReturningEntity(
-    db.Users.Delete(ctx).Where(Users.ID.Eq(id)),
+    db.Users.Delete().Where(Users.ID.Eq(id)),
 ).One(ctx)
 // the row as it was, immediately before it stopped existing
 ```
@@ -202,7 +202,7 @@ var changed = orm.Project2(
 )
 
 rows, err := orm.UpdateReturning(
-    db.Users.Update(ctx).Set(Users.Active, false).Where(cond),
+    db.Users.Update().Set(Users.Active.Set(false)).Where(cond),
     changed,
 ).All(ctx)
 // []Changed
@@ -230,7 +230,7 @@ update does not make an unconditional one safe:
 
 ```go
 _, err := orm.UpdateReturningEntity(
-    db.Users.Update(ctx).Set(Users.Active, false),
+    db.Users.Update().Set(Users.Active.Set(false)),
 ).All(ctx)
 // errors.Is(err, orm.ErrMissingWhere)
 ```
@@ -301,9 +301,9 @@ for chunk := range slices.Chunk(parsed, 1000) {
 The write and the check are one statement, so nothing can slip between them:
 
 ```go
-seat, err := db.Seats.Update(ctx).
-    Set(Seats.HeldBy, customerID).
-    Set(Seats.HeldUntil, time.Now().Add(10*time.Minute)).
+seat, err := db.Seats.Update().
+    Set(Seats.HeldBy.Set(customerID)).
+    Set(Seats.HeldUntil.Set(time.Now().Add(10*time.Minute))).
     Where(Seats.ID.Eq(seatID)).
     Where(Seats.HeldBy.IsNull()).
     Exec(ctx)
@@ -321,7 +321,7 @@ Delete, and keep what was deleted for the audit log:
 
 ```go
 gone, err := orm.DeleteReturningEntity(
-    db.Sessions.Delete(ctx).Where(Sessions.ExpiresAt.Lt(time.Now())),
+    db.Sessions.Delete().Where(Sessions.ExpiresAt.Lt(time.Now())),
 ).All(ctx)
 
 for _, s := range gone {
@@ -332,8 +332,8 @@ for _, s := range gone {
 ### A counter that never reads first
 
 ```go
-db.PageViews.Update(ctx).
-    SetExpr(PageViews.Hits, PageViews.Hits.Add(1)).
+db.PageViews.Update().
+    Set(PageViews.Hits.SetExpr(PageViews.Hits.Add(1))).
     Where(PageViews.Path.Eq(path)).
     Exec(ctx)
 ```

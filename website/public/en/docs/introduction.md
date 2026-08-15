@@ -77,8 +77,8 @@ db.Products.Query().Where(Products.Name.ILike("%lamp%"))
 
 // A ledger. The balance check is in the WHERE, so an overdraft is an update
 // that matched nothing rather than a race.
-db.Accounts.Update(ctx).
-    SetExpr(Accounts.Balance, Accounts.Balance.Sub(amount)).
+db.Accounts.Update().
+    Set(Accounts.Balance.SetExpr(Accounts.Balance.Sub(amount))).
     Where(Accounts.ID.Eq(id)).
     Where(Accounts.Balance.Gte(amount)).
     Exec(ctx)

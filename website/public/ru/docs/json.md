@@ -93,9 +93,8 @@ PostgreSQL, и они переданы как есть, а не переимен
 Они возвращают `Value`, поэтому их место в обновлении:
 
 ```go
-db.Users.Update(ctx).
-    SetExpr(Users.Settings,
-        orm.JSONSet(Users.Settings, []string{"plan"}, newPlan, true)).
+db.Users.Update().
+    Set(Users.Settings.SetExpr(orm.JSONSet(Users.Settings, []string{"plan"}, newPlan, true))).
     Where(Users.ID.Eq(id)).
     Exec(ctx)
 ```
@@ -155,9 +154,8 @@ orm.Compose(pool, big).From(Events.Source()).
 ### Документ профиля, правка на месте
 
 ```go
-db.Profiles.Update(ctx).
-    SetExpr(Profiles.Doc,
-        orm.JSONSet(Profiles.Doc, []string{"contact", "email"}, newEmail, true)).
+db.Profiles.Update().
+    Set(Profiles.Doc.SetExpr(orm.JSONSet(Profiles.Doc, []string{"contact", "email"}, newEmail, true))).
     Where(Profiles.ID.Eq(id)).
     Exec(ctx)
 ```

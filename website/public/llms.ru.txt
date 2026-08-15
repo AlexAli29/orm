@@ -41,7 +41,7 @@
 
 ## Рецепты
 
-- [Рецепты запросов](https://ormgo.vercel.app/ru/docs/cookbook/queries.md): Повседневные формы — фильтрация, страницы, агрегация, upsert, поиск.
+- [Рецепты запросов](https://ormgo.vercel.app/ru/docs/cookbook/queries.md): Повседневные формы, выписанные целиком — фильтры, страницы, агрегаты, соединения, окна, upsert, поиск.
 - [Сложные запросы](https://ormgo.vercel.app/ru/docs/cookbook/insane.md): Те, ради которых обычно берутся за сырой SQL, — составленные, типизированные и всё ещё одним запросом.
 - [Архитектуры проектов](https://ormgo.vercel.app/ru/docs/cookbook/architecture.md): Четыре рабочие компоновки и для чего на самом деле нужна каждая.
 

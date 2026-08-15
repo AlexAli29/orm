@@ -77,8 +77,8 @@ db.Products.Query().Where(Products.Name.ILike("%lamp%"))
 
 // Бухгалтерия. Проверка баланса в WHERE, поэтому овердрафт — это обновление,
 // не нашедшее строк, а не гонка.
-db.Accounts.Update(ctx).
-    SetExpr(Accounts.Balance, Accounts.Balance.Sub(amount)).
+db.Accounts.Update().
+    Set(Accounts.Balance.SetExpr(Accounts.Balance.Sub(amount))).
     Where(Accounts.ID.Eq(id)).
     Where(Accounts.Balance.Gte(amount)).
     Exec(ctx)

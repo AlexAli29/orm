@@ -71,15 +71,15 @@ Both legs or neither. The classic, and the reason the callback shape exists:
 
 ```go
 err := db.Tx(ctx, func(tx *domain.DB) error {
-    if _, err := tx.Accounts.Update(ctx).
-        SetExpr(Accounts.Balance, Accounts.Balance.Sub(amount)).
+    if _, err := tx.Accounts.Update().
+        Set(Accounts.Balance.SetExpr(Accounts.Balance.Sub(amount))).
         Where(Accounts.ID.Eq(from)).
         Where(Accounts.Balance.Gte(amount)).   // refuses to go negative
         Exec(ctx); err != nil {
         return err
     }
-    _, err := tx.Accounts.Update(ctx).
-        SetExpr(Accounts.Balance, Accounts.Balance.Add(amount)).
+    _, err := tx.Accounts.Update().
+        Set(Accounts.Balance.SetExpr(Accounts.Balance.Add(amount))).
         Where(Accounts.ID.Eq(to)).
         Exec(ctx)
     return err
@@ -121,8 +121,8 @@ err := db.Tx(ctx, func(tx *domain.DB) error {
         return err
     }
     for _, j := range jobs {
-        if _, err := tx.Jobs.Update(ctx).
-            Set(Jobs.State, "running").
+        if _, err := tx.Jobs.Update().
+            Set(Jobs.State.Set("running")).
             Where(Jobs.ID.Eq(j.ID)).
             Exec(ctx); err != nil {
             return err

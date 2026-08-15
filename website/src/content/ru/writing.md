@@ -32,8 +32,8 @@ db.Users.Insert(ctx, User{}, orm.Default(Users.Active, Users.CreatedAt))
 ## Update
 
 ```go
-n, err := db.Users.Update(ctx).
-    Set(Users.Active, false).
+n, err := db.Users.Update().
+    Set(Users.Active.Set(false)).
     Where(Users.CreatedAt.Lt(cutoff)).
     Exec(ctx)
 ```
@@ -41,28 +41,28 @@ n, err := db.Users.Update(ctx).
 Обновление без `WHERE` отвергается:
 
 ```go
-_, err := db.Users.Update(ctx).Set(Users.Active, false).Exec(ctx)
+_, err := db.Users.Update().Set(Users.Active.Set(false)).Exec(ctx)
 // errors.Is(err, orm.ErrMissingWhere)
 ```
 
 Если только вы не скажете, что имелись в виду все строки:
 
 ```go
-db.Users.Update(ctx).Set(Users.Active, false).All().Exec(ctx)
+db.Users.Update().Set(Users.Active.Set(false)).All().Exec(ctx)
 ```
 
 Присвоение выражения вместо значения:
 
 ```go
-db.Orders.Update(ctx).
-    SetExpr(Orders.Total, Orders.Net.AddCol(Orders.Tax)).
+db.Orders.Update().
+    Set(Orders.Total.SetExpr(Orders.Net.AddCol(Orders.Tax))).
     Where(Orders.ID.Eq(id))
 ```
 
 ## Delete
 
 ```go
-n, err := db.Users.Delete(ctx).Where(Users.ID.Eq(id)).Exec(ctx)
+n, err := db.Users.Delete().Where(Users.ID.Eq(id)).Exec(ctx)
 ```
 
 То же правило `ErrMissingWhere` и по той же причине.
@@ -155,8 +155,8 @@ user, err := db.Users.Insert(ctx, incoming,
 `Exec` возвращает счётчик:
 
 ```go
-n, err := db.Users.Update(ctx).
-    Set(Users.Active, false).
+n, err := db.Users.Update().
+    Set(Users.Active.Set(false)).
     Where(Users.CreatedAt.Lt(cutoff)).
     Exec(ctx)
 // n — сколько строк изменилось
@@ -166,14 +166,14 @@ n, err := db.Users.Update(ctx).
 
 ```go
 updated, err := orm.UpdateReturningEntity(
-    db.Users.Update(ctx).Set(Users.Active, false).Where(Users.CreatedAt.Lt(cutoff)),
+    db.Users.Update().Set(Users.Active.Set(false)).Where(Users.CreatedAt.Lt(cutoff)),
 ).All(ctx)
 // []User — каждая совпавшая строка в том виде, в каком она после обновления
 ```
 
 ```go
 deleted, err := orm.DeleteReturningEntity(
-    db.Users.Delete(ctx).Where(Users.ID.Eq(id)),
+    db.Users.Delete().Where(Users.ID.Eq(id)),
 ).One(ctx)
 // строка в том виде, в каком она была прямо перед тем, как перестать существовать
 ```
@@ -198,7 +198,7 @@ var changed = orm.Project2(
 )
 
 rows, err := orm.UpdateReturning(
-    db.Users.Update(ctx).Set(Users.Active, false).Where(cond),
+    db.Users.Update().Set(Users.Active.Set(false)).Where(cond),
     changed,
 ).All(ctx)
 // []Changed
@@ -226,7 +226,7 @@ rows, err := orm.UpdateReturning(
 
 ```go
 _, err := orm.UpdateReturningEntity(
-    db.Users.Update(ctx).Set(Users.Active, false),
+    db.Users.Update().Set(Users.Active.Set(false)),
 ).All(ctx)
 // errors.Is(err, orm.ErrMissingWhere)
 ```
@@ -297,9 +297,9 @@ for chunk := range slices.Chunk(parsed, 1000) {
 Запись и проверка — один оператор, поэтому между ними ничто не вклинится:
 
 ```go
-seat, err := db.Seats.Update(ctx).
-    Set(Seats.HeldBy, customerID).
-    Set(Seats.HeldUntil, time.Now().Add(10*time.Minute)).
+seat, err := db.Seats.Update().
+    Set(Seats.HeldBy.Set(customerID)).
+    Set(Seats.HeldUntil.Set(time.Now().Add(10*time.Minute))).
     Where(Seats.ID.Eq(seatID)).
     Where(Seats.HeldBy.IsNull()).
     Exec(ctx)
@@ -317,7 +317,7 @@ if seat == 0 {
 
 ```go
 gone, err := orm.DeleteReturningEntity(
-    db.Sessions.Delete(ctx).Where(Sessions.ExpiresAt.Lt(time.Now())),
+    db.Sessions.Delete().Where(Sessions.ExpiresAt.Lt(time.Now())),
 ).All(ctx)
 
 for _, s := range gone {
@@ -328,8 +328,8 @@ for _, s := range gone {
 ### Счётчик, который не читает сначала
 
 ```go
-db.PageViews.Update(ctx).
-    SetExpr(PageViews.Hits, PageViews.Hits.Add(1)).
+db.PageViews.Update().
+    Set(PageViews.Hits.SetExpr(PageViews.Hits.Add(1))).
     Where(PageViews.Path.Eq(path)).
     Exec(ctx)
 ```

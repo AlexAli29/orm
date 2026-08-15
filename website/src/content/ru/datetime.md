@@ -151,8 +151,8 @@ soon := time.Now().Add(72 * time.Hour)
 db.Trials.Query().Where(Trials.EndsAt.Between(time.Now(), soon))
 
 // Продление — в SQL, без предварительного чтения.
-db.Trials.Update(ctx).
-    SetExpr(Trials.EndsAt, orm.AddInterval(Trials.EndsAt, orm.Val(orm.IntervalOf(0, 14, 0)))).
+db.Trials.Update().
+    Set(Trials.EndsAt.SetExpr(orm.AddInterval(Trials.EndsAt, orm.Val(orm.IntervalOf(0, 14, 0))))).
     Where(Trials.ID.Eq(id)).
     Exec(ctx)
 ```

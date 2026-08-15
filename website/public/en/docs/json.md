@@ -93,9 +93,8 @@ because a reader checking the manual should find the same argument.
 They return a `Value`, so they belong in an update:
 
 ```go
-db.Users.Update(ctx).
-    SetExpr(Users.Settings,
-        orm.JSONSet(Users.Settings, []string{"plan"}, newPlan, true)).
+db.Users.Update().
+    Set(Users.Settings.SetExpr(orm.JSONSet(Users.Settings, []string{"plan"}, newPlan, true))).
     Where(Users.ID.Eq(id)).
     Exec(ctx)
 ```
@@ -156,9 +155,8 @@ holds, and a comparison against a number has to say so.
 ### A profile document, edited in place
 
 ```go
-db.Profiles.Update(ctx).
-    SetExpr(Profiles.Doc,
-        orm.JSONSet(Profiles.Doc, []string{"contact", "email"}, newEmail, true)).
+db.Profiles.Update().
+    Set(Profiles.Doc.SetExpr(orm.JSONSet(Profiles.Doc, []string{"contact", "email"}, newEmail, true))).
     Where(Profiles.ID.Eq(id)).
     Exec(ctx)
 ```
