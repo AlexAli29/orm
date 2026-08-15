@@ -14,6 +14,11 @@ import (
 //
 // The repositories are the runtime's generic ones: nothing about reading a
 // row differs per entity, so nothing per entity is generated for it.
+//
+// A view gets a read-only repository. It has no Insert, Update, Delete or
+// CopyFrom — not methods that fail, no methods — so writing through a view
+// is a compile error at the line that tried rather than a runtime error on
+// the path least likely to be tested.
 type DB struct {
 	ex       orm.Executor
 	Articles *orm.Repo[Article]
