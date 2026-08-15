@@ -31,5 +31,11 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/google62abdce98e522ffa.html",
+      "destination": "/google62abdce98e522ffa/"
+    }
   ]
 }
