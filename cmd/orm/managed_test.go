@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -213,4 +215,88 @@ func TestCheck_jsonStaysValid(t *testing.T) {
 		t.Errorf("--format json produced something that is not JSON: %v\n%s", err, stdout)
 	}
 	contains(t, stderr, "Models       match the latest migration", "the state block")
+}
+
+// An empty migration is the affordance for everything the schema diff cannot
+// see: a backfill, a seed, a correction. Without it the only way to run data
+// SQL through the migration engine was to hand-write an artifact from nothing,
+// inventing the ID, the dependency and the JSON shape — which is a lot to ask
+// for an INSERT.
+func TestMakemigrations_empty(t *testing.T) {
+	p := newProject(t, usersEntities("Email string `orm:\"unique\"`"))
+	p.MustRun("makemigrations", "--name", "initial")
+
+	// The models have not moved, so an ordinary run has nothing to write.
+	contains(t, p.MustRun("makemigrations"), "No schema changes detected", "an unchanged model")
+
+	// --empty writes one anyway, because it was asked for rather than derived.
+	out := p.MustRun("makemigrations", "--empty", "--name", "seed_tags")
+	contains(t, out, "0002_seed_tags", "--empty")
+	contains(t, out, "Fill in Up", "--empty")
+
+	files := p.Migrations()
+	if len(files) != 2 {
+		t.Fatalf("migrations = %v, want the initial one and the empty one", files)
+	}
+
+	body, err := os.ReadFile(filepath.Join(p.Dir, "migrations", "0002_seed_tags.json"))
+	if err != nil {
+		t.Fatalf("reading the empty migration: %v", err)
+	}
+	var doc struct {
+		DependsOn  []string `json:"dependsOn"`
+		Operations []struct {
+			Op   string          `json:"op"`
+			Args json.RawMessage `json:"args"`
+		} `json:"operations"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatalf("the empty migration is not valid JSON: %v\n%s", err, body)
+	}
+	if len(doc.Operations) != 1 || doc.Operations[0].Op != "raw_sql" {
+		t.Errorf("operations = %+v, want one raw_sql to fill in", doc.Operations)
+	}
+	if len(doc.DependsOn) != 1 || doc.DependsOn[0] != "0001_initial" {
+		t.Errorf("depends_on = %v, want the migration before it", doc.DependsOn)
+	}
+
+	// And it does not disturb the diff: the models still match.
+	contains(t, p.MustRun("makemigrations"), "No schema changes detected", "after an empty migration")
+
+	// Without a name it is called what it is for, not "auto" — nothing was
+	// derived, so a derived-sounding name would be a lie.
+	contains(t, p.MustRun("makemigrations", "--empty"), "0003_data", "an unnamed empty migration")
+}
+
+// The referential action reaches the database, which is the only place it
+// counts. Everything before this is a claim about a string.
+func TestMakemigrations_referentialActions(t *testing.T) {
+	p := newProject(t, `package domain
+
+import "github.com/AlexAli29/orm"
+
+//orm:table users
+type User struct {
+	ID int64 `+"`orm:\"pk,identity\"`"+`
+}
+
+//orm:table posts
+type Post struct {
+	ID       int64 `+"`orm:\"pk,identity\"`"+`
+	AuthorID int64
+
+	Author orm.One[User] `+"`orm:\"side:local,ondelete:cascade\"`"+`
+}
+`)
+	p.MustRun("makemigrations", "--name", "initial")
+	p.MustRun("migrate")
+
+	got := p.Query(`SELECT confdeltype::text FROM pg_constraint WHERE conname = 'posts_author_id_fkey'`)
+	if len(got) != 1 || got[0] != "c" {
+		t.Fatalf("confdeltype = %v, want [c] for ON DELETE CASCADE", got)
+	}
+
+	// And the mapping is clean afterwards: the declaration and the database
+	// agree about the action, so nothing plans to change it back.
+	contains(t, p.MustRun("makemigrations"), "No schema changes detected", "after a cascade was created")
 }

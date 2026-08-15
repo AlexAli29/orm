@@ -59,8 +59,22 @@ A generated migration describes schema operations, and there is nowhere in
 `create table` or `add column` to put rows. That is not the whole story though,
 and these docs have been letting people believe it was.
 
-The artifact is JSON, and one of the operations it encodes is `raw_sql`. Adding
-one to a generated migration is an edit to a file you already review:
+`orm makemigrations --empty` writes one for you, so you are editing a file
+rather than inventing one:
+
+```console
+$ orm makemigrations --empty --name seed_tags
+wrote migrations/0002_seed_tags.json
+
+Fill in Up with the SQL to run, and Down with the SQL that undoes it.
+```
+
+It is written whether or not the models moved, because data is exactly the case
+the schema diff cannot see. The stub it leaves behind raises an exception rather
+than doing nothing, so a migration created and then forgotten fails instead of
+being recorded as applied.
+
+The artifact is JSON, and the operation is `raw_sql`:
 
 ```json
 {

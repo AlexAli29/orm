@@ -110,6 +110,7 @@ func makemigrations(ctx context.Context, args []string, stdin io.Reader, stdout,
 	noInput := fs.Bool("no-input", false, "never ask a question; fail instead when a rename cannot be resolved")
 	noRename := fs.Bool("no-rename", false, "treat every rename candidate as a drop and an add")
 	baseline := fs.Bool("baseline", false, "build the first migration from the schema the database already has")
+	empty := fs.Bool("empty", false, "write a migration with a raw SQL operation to fill in, for data the schema diff cannot see")
 	renames := &renameFlag{}
 	tableRenames := &renameFlag{table: true}
 	fs.Var(renames, "rename", "a confirmed column rename, as table.old=new; repeatable")
@@ -192,6 +193,56 @@ func makemigrations(ctx context.Context, args []string, stdin io.Reader, stdout,
 				return exitFailure
 			}
 		}
+	}
+
+	// An empty migration is asked for rather than derived, so it is written
+	// whether or not the models moved. Data is the case the diff cannot see:
+	// a backfill, a seed, a correction. The operation is a stub with the SQL
+	// left blank, because inventing SQL nobody asked for would be worse than
+	// an obvious hole.
+	if *empty {
+		name := *name
+		if name == "" {
+			// Summarize has no operations to read, and "auto" would name a
+			// migration nothing derived it. Data is what --empty is for.
+			name = "data"
+		}
+		id := migrate.NextID(set, name)
+		m := &migrate.Migration{
+			ID:     id,
+			Atomic: true,
+			Operations: []migrate.Operation{migrate.RawSQL{
+				// A stub that refuses to run. An empty statement is rejected
+				// when the migration is written, and a comment would apply
+				// cleanly and do nothing — which is the worst of the three,
+				// because a migration that forgot its contents would be
+				// recorded as applied. This one fails until it is edited.
+				Up: "DO $$ BEGIN\n" +
+					"    RAISE EXCEPTION 'this migration was created with --empty and never filled in';\n" +
+					"END $$;",
+				Atomic:      true,
+				Description: "describe what this does",
+			}},
+		}
+		if last := set.Migrations(); len(last) > 0 {
+			m.DependsOn = []string{last[len(last)-1].ID}
+		}
+		if *dryRun {
+			reportMigration(stdout, m, true)
+			fmt.Fprintf(stdout, "\n--dry-run: %s was not written\n", p.Config().Rel(p.Store().Path(id)))
+			return exitClean
+		}
+		file, err := p.Store().Write(m)
+		if err != nil {
+			fmt.Fprintf(stderr, "orm makemigrations: %v\n", err)
+			return exitFailure
+		}
+		fmt.Fprintf(stdout, "wrote %s\n\n", p.Config().Rel(file))
+		fmt.Fprint(stdout, "Fill in Up with the SQL to run, and Down with the SQL that undoes it.\n"+
+			"Leaving Down empty makes the migration irreversible, which is the honest\n"+
+			"answer when it is. If the SQL changes the schema rather than the data,\n"+
+			"add a state_only operation beside it so the migration state stays true.\n")
+		return exitClean
 	}
 
 	if d.Empty() {
