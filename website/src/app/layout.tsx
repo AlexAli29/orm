@@ -59,6 +59,19 @@ export const metadata: Metadata = {
     },
   },
   icons: { icon: '/favicon.svg' },
+  // Search Console ownership.
+  //
+  // The domain is vercel.app, which belongs to Vercel, so the DNS record a
+  // Domain property asks for cannot be added — it would have to go in somebody
+  // else's zone. A URL-prefix property verified by meta tag is the method that
+  // fits, and the token comes from the environment so it is set in the deploy
+  // rather than committed here.
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
+    other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+      ? { 'msvalidate.01': process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
+      : undefined,
+  },
 };
 
 export const viewport: Viewport = {
