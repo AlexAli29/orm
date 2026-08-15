@@ -185,7 +185,7 @@ jobs:
         run: |
           go test -run '^$' -fuzz FuzzScanPlaceholders -fuzztime 30s ./internal/expr/
           go test -run '^$' -fuzz FuzzIdentifier -fuzztime 30s ./internal/expr/
-          go test -run '^$' -fuzz FuzzArtifact -fuzztime 30s ./gen/migrate/
+          go test -run '^$' -fuzz FuzzArtifact -fuzztime 30s ./internal/gen/migrate/
 
       # Compiled and measured, so a regression in the work between the caller
       # and pgx shows up as a build failure rather than as nothing.
