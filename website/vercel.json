@@ -4,12 +4,12 @@
     {
       "source": "/",
       "destination": "/en",
-      "permanent": false
+      "permanent": true
     },
     {
       "source": "/docs/:path*",
       "destination": "/en/docs/:path*",
-      "permanent": false
+      "permanent": true
     }
   ],
   "headers": [

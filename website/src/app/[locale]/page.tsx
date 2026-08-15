@@ -29,7 +29,10 @@ export async function generateMetadata({
   return {
     alternates: {
       canonical: `/${locale}/`,
-      languages: Object.fromEntries(locales.map((l) => [l, `/${l}/`])),
+      languages: {
+        ...Object.fromEntries(locales.map((l) => [l, `/${l}/`])),
+        "x-default": "/en/",
+      },
     },
     openGraph: {
       type: 'website',
